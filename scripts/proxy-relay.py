@@ -9,30 +9,23 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
 
+PIDFILE = "/tmp/proxy-relay.pid"
+
+
 def kill_existing():
-    import subprocess, time
-    current_pid = os.getpid()
-    killed = []
+    import time
     try:
-        result = subprocess.check_output(["pgrep", "-f", "proxy-relay.py"])
-        for pid in result.decode().split():
-            pid = int(pid)
-            if pid != current_pid:
-                os.kill(pid, signal.SIGTERM)
-                killed.append(pid)
+        pid = int(open(PIDFILE).read().strip())
+        if os.path.exists(f"/proc/{pid}"):
+            os.kill(pid, signal.SIGTERM)
+            for _ in range(20):
+                time.sleep(0.1)
+                if not os.path.exists(f"/proc/{pid}"):
+                    break
+            else:
+                os.kill(pid, signal.SIGKILL)
     except Exception:
         pass
-    if killed:
-        for _ in range(20):
-            time.sleep(0.1)
-            still_alive = [p for p in killed if os.path.exists(f"/proc/{p}")]
-            if not still_alive:
-                break
-        for p in still_alive:
-            try:
-                os.kill(p, signal.SIGKILL)
-            except Exception:
-                pass
 
 
 def get_upstream():
@@ -85,20 +78,24 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    import sys
+    import subprocess, sys
     kill_existing()
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 18080
 
-    # Daemonize: fork and let parent exit so shell doesn't block
-    if os.fork() > 0:
-        os._exit(0)
-    os.setsid()
+    # If not already a daemon, re-spawn self as fully detached process and exit
+    if os.environ.get("_PROXY_RELAY_DAEMON") != "1":
+        env = os.environ.copy()
+        env["_PROXY_RELAY_DAEMON"] = "1"
+        subprocess.Popen(
+            [sys.executable, __file__] + sys.argv[1:],
+            env=env,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+        sys.exit(0)
 
-    # Redirect stdio to /dev/null so parent's shell returns immediately
-    devnull = os.open(os.devnull, os.O_RDWR)
-    for fd in (0, 1, 2):
-        os.dup2(devnull, fd)
-    os.close(devnull)
-
+    open(PIDFILE, "w").write(str(os.getpid()))
     print(f"Proxy relay listening on localhost:{port}", flush=True)
     ThreadingHTTPServer(("127.0.0.1", port), Handler).serve_forever()
