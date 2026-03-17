@@ -75,5 +75,11 @@ if __name__ == "__main__":
     import sys
     kill_existing()
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 18080
+
+    # Daemonize: fork and let parent exit so shell doesn't block
+    if os.fork() > 0:
+        os._exit(0)
+    os.setsid()
+
     print(f"Proxy relay listening on localhost:{port}", flush=True)
     ThreadingHTTPServer(("127.0.0.1", port), Handler).serve_forever()
