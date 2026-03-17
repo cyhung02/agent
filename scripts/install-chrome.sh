@@ -59,6 +59,17 @@ ln -sf "$INSTALL_BASE/chrome-linux64/chrome" "$BIN_DIR/chrome"
 echo "==> Installing system dependencies..." | tee -a "$LOG_FILE"
 apt-get update -qq
 
+# 從解壓縮後的目錄中讀取 deb.deps，過濾掉註解，並用逗號連接
+DEPS=$(grep -v '^#' "$INSTALL_BASE/chrome-linux64/deb.deps" | paste -sd ',')
+
+# 執行依賴安裝，並將日誌導入 $LOG_FILE 方便日後除錯
+if apt-get satisfy -y --no-install-recommends "$DEPS" >> "$LOG_FILE" 2>&1; then
+    echo "    Dependencies installed successfully." | tee -a "$LOG_FILE"
+else
+    echo "Error: Failed to install system dependencies. Check $LOG_FILE for details." | tee -a "$LOG_FILE" >&2
+    exit 1
+fi
+
 echo "==> Installation completed successfully!" | tee -a "$LOG_FILE"
 echo ""
 echo "💡 您現在可以使用以下指令來測試："
