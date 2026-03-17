@@ -78,23 +78,14 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    import subprocess, sys
+    import sys
     kill_existing()
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 18080
 
-    # If not already a daemon, re-spawn self as fully detached process and exit
-    if os.environ.get("_PROXY_RELAY_DAEMON") != "1":
-        env = os.environ.copy()
-        env["_PROXY_RELAY_DAEMON"] = "1"
-        subprocess.Popen(
-            [sys.executable, __file__] + sys.argv[1:],
-            env=env,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True,
-        )
-        sys.exit(0)
+    # Daemonize: fork and let parent exit so shell doesn't block
+    if os.fork() > 0:
+        os._exit(0)
+    os.setsid()
 
     open(PIDFILE, "w").write(str(os.getpid()))
     print(f"Proxy relay listening on localhost:{port}", flush=True)
