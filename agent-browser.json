@@ -1,5 +1,5 @@
 {
   "proxy": "http://localhost:18080",
   "ignoreHttpsErrors": true,
-  "executablePath": "/root/.local/opt/chrome-linux64/chrome"
+  "executablePath": "/root/.local/bin/chrome"
 }
