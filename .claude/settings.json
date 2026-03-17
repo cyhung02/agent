@@ -10,7 +10,7 @@
           },
           {
             "type": "command",
-            "command": "echo 111"
+            "command": "python3 scripts/proxy-relay.py"
           }
         ]
       },
