@@ -10,7 +10,7 @@
           },
           {
             "type": "command",
-            "command": "nohup python3 scripts/proxy-relay.py > /tmp/proxy-relay.log 2>&1 & disown"
+            "command": "pkill -f proxy-relay.py 2>/dev/null; nohup python3 scripts/proxy-relay.py > /tmp/proxy-relay.log 2>&1 & disown"
           }
         ]
       },
@@ -19,7 +19,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "nohup python3 scripts/proxy-relay.py > /tmp/proxy-relay.log 2>&1 & disown"
+            "command": "pkill -f proxy-relay.py 2>/dev/null; nohup python3 scripts/proxy-relay.py > /tmp/proxy-relay.log 2>&1 & disown"
           }
         ]
       }
