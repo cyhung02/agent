@@ -11,5 +11,3 @@ echo "==> Installing agent-browser skill..."
 npx skills add vercel-labs/agent-browser --yes
 
 echo "==> Init complete."
-
-python3 "$SCRIPT_DIR/proxy-relay.py"
