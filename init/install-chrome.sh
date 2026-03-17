@@ -11,14 +11,14 @@ LOG_FILE="$HOME/chrome_install.log"
 echo "==>[$(date +'%Y-%m-%dT%H:%M:%S')] Starting Chrome for Testing installation" | tee -a "$LOG_FILE"
 
 # 2. 檢查必備工具
-for cmd in curl jq unzip; do
+for cmd in curl jq unzip sudo; do
   if ! command -v "$cmd" &> /dev/null; then
     echo "Error: 命令 '$cmd' 找不到，請先安裝。" | tee -a "$LOG_FILE" >&2
     exit 1
   fi
 done
 
-# 3. 建立暫存目錄並設定自動清理機制 (腳本結束或中斷時觸發)
+# 3. 建立暫存目錄並設定自動清理機制
 WORK_DIR=$(mktemp -d)
 trap 'rm -rf "$WORK_DIR"' EXIT
 
@@ -51,13 +51,26 @@ rm -rf "$INSTALL_BASE/chrome-linux64"
 echo "==> Extracting to $INSTALL_BASE..." | tee -a "$LOG_FILE"
 unzip -oq "$ZIP_PATH" -d "$INSTALL_BASE"
 
-# 8. 建立軟連結到 ~/.local/bin/ (更改為 chrome)
+# 8. 建立軟連結到 ~/.local/bin/chrome
 echo "==> Creating symlink in $BIN_DIR..." | tee -a "$LOG_FILE"
 ln -sf "$INSTALL_BASE/chrome-linux64/chrome" "$BIN_DIR/chrome"
 
+# 9. 安裝系統依賴 (需要 sudo，移至最後一步)
+echo "==> Installing system dependencies (requires sudo)..." | tee -a "$LOG_FILE"
+sudo apt-get update -qq
+
+# 從解壓縮後的目錄中讀取 deb.deps，過濾掉註解，並用逗號連接
+DEPS=$(grep -v '^#' "$INSTALL_BASE/chrome-linux64/deb.deps" | paste -sd ',')
+
+# 執行依賴安裝，並將日誌導入 $LOG_FILE 方便日後除錯
+if sudo apt-get satisfy -y --no-install-recommends "$DEPS" >> "$LOG_FILE" 2>&1; then
+    echo "    Dependencies installed successfully." | tee -a "$LOG_FILE"
+else
+    echo "Error: Failed to install system dependencies. Check $LOG_FILE for details." | tee -a "$LOG_FILE" >&2
+    exit 1
+fi
+
 echo "==> Installation completed successfully!" | tee -a "$LOG_FILE"
 echo ""
-echo "您現在可以使用以下指令來測試："
+echo "💡 您現在可以使用以下指令來測試："
 echo "    chrome --version"
-echo ""
-echo "注意：如果出現 'command not found'，請確保 $BIN_DIR 已加入您的 PATH 環境變數中。"
