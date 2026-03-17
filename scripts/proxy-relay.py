@@ -9,15 +9,21 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
 
+PIDFILE = "/tmp/proxy-relay.pid"
+
+
 def kill_existing():
-    current_pid = os.getpid()
+    import time
     try:
-        import subprocess
-        result = subprocess.check_output(["pgrep", "-f", "proxy-relay.py"])
-        for pid in result.decode().split():
-            pid = int(pid)
-            if pid != current_pid:
-                os.kill(pid, signal.SIGTERM)
+        pid = int(open(PIDFILE).read().strip())
+        if os.path.exists(f"/proc/{pid}"):
+            os.kill(pid, signal.SIGTERM)
+            for _ in range(20):
+                time.sleep(0.1)
+                if not os.path.exists(f"/proc/{pid}"):
+                    break
+            else:
+                os.kill(pid, signal.SIGKILL)
     except Exception:
         pass
 
@@ -81,5 +87,6 @@ if __name__ == "__main__":
         os._exit(0)
     os.setsid()
 
+    open(PIDFILE, "w").write(str(os.getpid()))
     print(f"Proxy relay listening on localhost:{port}", flush=True)
     ThreadingHTTPServer(("127.0.0.1", port), Handler).serve_forever()
