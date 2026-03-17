@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "echo 111 &"
+            "command": "bash scripts/init.sh"
           }
         ]
       },
