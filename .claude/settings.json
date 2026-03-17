@@ -7,19 +7,6 @@
           {
             "type": "command",
             "command": "bash scripts/init.sh"
-          },
-          {
-            "type": "command",
-            "command": "nohup python3 scripts/proxy-relay.py"
-          }
-        ]
-      },
-      {
-        "matcher": "resume",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "nohup python3 scripts/proxy-relay.py"
           }
         ]
       }
