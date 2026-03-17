@@ -10,16 +10,29 @@ from urllib.parse import urlparse
 
 
 def kill_existing():
+    import subprocess, time
     current_pid = os.getpid()
+    killed = []
     try:
-        import subprocess
         result = subprocess.check_output(["pgrep", "-f", "proxy-relay.py"])
         for pid in result.decode().split():
             pid = int(pid)
             if pid != current_pid:
                 os.kill(pid, signal.SIGTERM)
+                killed.append(pid)
     except Exception:
         pass
+    if killed:
+        for _ in range(20):
+            time.sleep(0.1)
+            still_alive = [p for p in killed if os.path.exists(f"/proc/{p}")]
+            if not still_alive:
+                break
+        for p in still_alive:
+            try:
+                os.kill(p, signal.SIGKILL)
+            except Exception:
+                pass
 
 
 def get_upstream():
