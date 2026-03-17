@@ -4,9 +4,22 @@ Local proxy relay: reads $HTTP_PROXY on every request and injects auth.
 Chrome -> localhost:18080 -> $HTTP_PROXY (with Proxy-Authorization)
 """
 
-import base64, os, select, socket, threading
+import base64, os, select, signal, socket, threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
+
+
+def kill_existing():
+    current_pid = os.getpid()
+    try:
+        import subprocess
+        result = subprocess.check_output(["pgrep", "-f", "proxy-relay.py"])
+        for pid in result.decode().split():
+            pid = int(pid)
+            if pid != current_pid:
+                os.kill(pid, signal.SIGTERM)
+    except Exception:
+        pass
 
 
 def get_upstream():
@@ -60,6 +73,13 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     import sys
+    kill_existing()
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 18080
+
+    # Daemonize: fork and let parent exit so shell doesn't block
+    if os.fork() > 0:
+        os._exit(0)
+    os.setsid()
+
     print(f"Proxy relay listening on localhost:{port}", flush=True)
     ThreadingHTTPServer(("127.0.0.1", port), Handler).serve_forever()
