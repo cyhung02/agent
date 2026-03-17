@@ -1,0 +1,28 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash scripts/init.sh"
+          },
+          {
+            "type": "command",
+            "command": "python3 scripts/proxy-relay.py &"
+          }
+        ]
+      },
+      {
+        "matcher": "resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 scripts/proxy-relay.py &"
+          }
+        ]
+      }
+    ]
+  }
+}
