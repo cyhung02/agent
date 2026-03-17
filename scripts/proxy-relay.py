@@ -11,7 +11,6 @@ from urllib.parse import urlparse
 
 PIDFILE = "/tmp/proxy-relay.pid"
 LOGFILE = "/tmp/proxy-relay.log"
-PROXYFILE = "/tmp/proxy-relay.upstream"  # external processes write HTTP_PROXY URL here
 
 _proxy_lock = threading.Lock()
 _proxy_cache: dict = {"url": "", "ts": 0.0}
@@ -69,20 +68,13 @@ def get_upstream():
     """Return (host, port, auth) for the upstream proxy, re-resolved up to every 30 s.
 
     Resolution order:
-      1. PROXYFILE (/tmp/proxy-relay.upstream) — manual override by external processes
-      2. /proc scan for the live environment-manager process (picks up new session tokens)
-      3. $HTTP_PROXY / $http_proxy captured at daemon launch (last-resort fallback)
+      1. /proc scan for the live environment-manager process (picks up new session tokens)
+      2. $HTTP_PROXY / $http_proxy captured at daemon launch (last-resort fallback)
     """
     now = time.monotonic()
     with _proxy_lock:
         if now - _proxy_cache["ts"] >= _CACHE_TTL:
-            url = ""
-            try:
-                url = open(PROXYFILE).read().strip()
-            except OSError:
-                pass
-            if not url:
-                url = _scan_env_manager_proxy()
+            url = _scan_env_manager_proxy()
             if not url:
                 url = os.environ.get("HTTP_PROXY") or os.environ.get("http_proxy", "")
             _proxy_cache["url"] = url
@@ -207,9 +199,5 @@ if __name__ == "__main__":
     os.close(log_fd)
 
     open(PIDFILE, "w").write(str(os.getpid()))
-    # Seed PROXYFILE from env so the file always reflects the initial upstream
-    initial = os.environ.get("HTTP_PROXY") or os.environ.get("http_proxy", "")
-    if initial:
-        open(PROXYFILE, "w").write(initial)
     print(f"Proxy relay listening on localhost:{port}", flush=True)
     ThreadingHTTPServer(("127.0.0.1", port), Handler).serve_forever()
