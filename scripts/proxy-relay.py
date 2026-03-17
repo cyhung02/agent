@@ -80,8 +80,9 @@ class RelayHandler(BaseHTTPRequestHandler):
                     if not chunk:
                         break
                     resp += chunk
-                if b"200" not in resp.split(b"\r\n")[0]:
-                    self.send_error(502, f"Upstream proxy error: {resp.split(b'\\r\\n')[0]}")
+                status_line = resp.split(b"\r\n")[0]
+                if b"200" not in status_line:
+                    self.send_error(502, f"Upstream proxy error: {status_line}")
                     sock.close()
                     return
             else:
