@@ -4,7 +4,7 @@ Local proxy relay: reads $HTTP_PROXY on each request and injects auth.
 Chrome -> localhost:18080 -> $HTTP_PROXY (with Proxy-Authorization)
 """
 
-import base64, os, select, signal, socket, threading
+import base64, os, select, signal, socket, threading, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
@@ -12,6 +12,36 @@ from urllib.parse import urlparse
 PIDFILE = "/tmp/proxy-relay.pid"
 LOGFILE = "/tmp/proxy-relay.log"
 PROXYFILE = "/tmp/proxy-relay.upstream"  # external processes write HTTP_PROXY URL here
+
+_proxy_lock = threading.Lock()
+_proxy_cache: dict = {"url": "", "ts": 0.0}
+_CACHE_TTL = 30.0  # seconds
+
+
+def _scan_env_manager_proxy() -> str:
+    """Scan /proc for the most recently started environment-manager process and return its HTTP_PROXY."""
+    best_pid = -1
+    best_url = ""
+    try:
+        for pid_str in os.listdir("/proc"):
+            if not pid_str.isdigit():
+                continue
+            pid = int(pid_str)
+            try:
+                cmdline = open(f"/proc/{pid}/cmdline").read()
+                if "environment-manager" not in cmdline:
+                    continue
+                for var in open(f"/proc/{pid}/environ").read().split("\0"):
+                    if var.startswith("HTTP_PROXY="):
+                        if pid > best_pid:
+                            best_pid = pid
+                            best_url = var[11:]
+                        break
+            except OSError:
+                continue
+    except OSError:
+        pass
+    return best_url
 
 
 def kill_existing():
@@ -36,19 +66,28 @@ def kill_existing():
 
 
 def get_upstream():
-    """Read upstream proxy URL on every request.
+    """Return (host, port, auth) for the upstream proxy, re-resolved up to every 30 s.
 
-    Priority:
-      1. PROXYFILE (/tmp/proxy-relay.upstream) — updated by external processes at runtime
-      2. $HTTP_PROXY / $http_proxy from the environment at daemon launch (fallback)
+    Resolution order:
+      1. PROXYFILE (/tmp/proxy-relay.upstream) — manual override by external processes
+      2. /proc scan for the live environment-manager process (picks up new session tokens)
+      3. $HTTP_PROXY / $http_proxy captured at daemon launch (last-resort fallback)
     """
-    url = ""
-    try:
-        url = open(PROXYFILE).read().strip()
-    except OSError:
-        pass
-    if not url:
-        url = os.environ.get("HTTP_PROXY") or os.environ.get("http_proxy", "")
+    now = time.monotonic()
+    with _proxy_lock:
+        if now - _proxy_cache["ts"] >= _CACHE_TTL:
+            url = ""
+            try:
+                url = open(PROXYFILE).read().strip()
+            except OSError:
+                pass
+            if not url:
+                url = _scan_env_manager_proxy()
+            if not url:
+                url = os.environ.get("HTTP_PROXY") or os.environ.get("http_proxy", "")
+            _proxy_cache["url"] = url
+            _proxy_cache["ts"] = now
+        url = _proxy_cache["url"]
     p = urlparse(url)
     auth = base64.b64encode(f"{p.username}:{p.password}".encode()).decode() if p.username else None
     return p.hostname, p.port or 8080, auth
