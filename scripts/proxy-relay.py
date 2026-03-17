@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Local proxy relay: reads $HTTP_PROXY on every request and injects auth.
+Local proxy relay: reads $HTTP_PROXY on each request and injects auth.
 Chrome -> localhost:18080 -> $HTTP_PROXY (with Proxy-Authorization)
 """
 
@@ -10,25 +10,32 @@ from urllib.parse import urlparse
 
 
 PIDFILE = "/tmp/proxy-relay.pid"
+LOGFILE = "/tmp/proxy-relay.log"
 
 
 def kill_existing():
     import time
     try:
         pid = int(open(PIDFILE).read().strip())
-        if os.path.exists(f"/proc/{pid}"):
-            os.kill(pid, signal.SIGTERM)
-            for _ in range(20):
-                time.sleep(0.1)
-                if not os.path.exists(f"/proc/{pid}"):
-                    break
-            else:
-                os.kill(pid, signal.SIGKILL)
+        try:
+            os.kill(pid, 0)  # POSIX-standard: check process existence (works on Linux & macOS)
+        except (ProcessLookupError, PermissionError) as e:
+            if isinstance(e, ProcessLookupError):
+                return  # process already gone
+        os.kill(pid, signal.SIGTERM)
+        for _ in range(20):
+            time.sleep(0.1)
+            try:
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                return
+        os.kill(pid, signal.SIGKILL)
     except Exception:
         pass
 
 
 def get_upstream():
+    """Read $HTTP_PROXY from the current environment (re-evaluated on each call)."""
     p = urlparse(os.environ.get("HTTP_PROXY") or os.environ.get("http_proxy", ""))
     auth = base64.b64encode(f"{p.username}:{p.password}".encode()).decode() if p.username else None
     return p.hostname, p.port or 8080, auth
@@ -76,6 +83,60 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as e:
             self.send_error(502, str(e))
 
+    def do_GET(self):
+        self._forward_plain()
+
+    def do_POST(self):
+        self._forward_plain()
+
+    def do_PUT(self):
+        self._forward_plain()
+
+    def do_DELETE(self):
+        self._forward_plain()
+
+    def do_HEAD(self):
+        self._forward_plain()
+
+    def do_OPTIONS(self):
+        self._forward_plain()
+
+    def _forward_plain(self):
+        """Forward plain HTTP requests through the upstream proxy."""
+        host, port, auth = get_upstream()
+        try:
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length) if content_length else b""
+
+            sock = socket.create_connection((host, port), timeout=15)
+
+            # Rebuild the request line, preserving the full URL for the upstream proxy
+            req_line = f"{self.command} {self.path} {self.request_version}\r\n"
+            headers = str(self.headers)
+            if auth:
+                headers += f"Proxy-Authorization: Basic {auth}\r\n"
+            sock.sendall((req_line + headers + "\r\n").encode() + body)
+
+            # Stream the response back to the client
+            def relay_response(src, dst_wfile):
+                try:
+                    while True:
+                        r, _, _ = select.select([src], [], [], 30)
+                        if not r:
+                            break
+                        data = src.recv(65536)
+                        if not data:
+                            break
+                        dst_wfile.write(data)
+                        dst_wfile.flush()
+                except Exception:
+                    pass
+
+            relay_response(sock, self.wfile)
+            sock.close()
+        except Exception as e:
+            self.send_error(502, str(e))
+
 
 if __name__ == "__main__":
     import sys
@@ -86,6 +147,12 @@ if __name__ == "__main__":
     if os.fork() > 0:
         os._exit(0)
     os.setsid()
+
+    # Redirect stdout/stderr to log file to avoid polluting the parent terminal
+    log_fd = os.open(LOGFILE, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+    os.dup2(log_fd, sys.stdout.fileno())
+    os.dup2(log_fd, sys.stderr.fileno())
+    os.close(log_fd)
 
     open(PIDFILE, "w").write(str(os.getpid()))
     print(f"Proxy relay listening on localhost:{port}", flush=True)
