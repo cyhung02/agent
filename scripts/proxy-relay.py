@@ -11,6 +11,7 @@ from urllib.parse import urlparse
 
 PIDFILE = "/tmp/proxy-relay.pid"
 LOGFILE = "/tmp/proxy-relay.log"
+PROXYFILE = "/tmp/proxy-relay.upstream"  # external processes write HTTP_PROXY URL here
 
 
 def kill_existing():
@@ -35,8 +36,20 @@ def kill_existing():
 
 
 def get_upstream():
-    """Read $HTTP_PROXY from the current environment (re-evaluated on each call)."""
-    p = urlparse(os.environ.get("HTTP_PROXY") or os.environ.get("http_proxy", ""))
+    """Read upstream proxy URL on every request.
+
+    Priority:
+      1. PROXYFILE (/tmp/proxy-relay.upstream) — updated by external processes at runtime
+      2. $HTTP_PROXY / $http_proxy from the environment at daemon launch (fallback)
+    """
+    url = ""
+    try:
+        url = open(PROXYFILE).read().strip()
+    except OSError:
+        pass
+    if not url:
+        url = os.environ.get("HTTP_PROXY") or os.environ.get("http_proxy", "")
+    p = urlparse(url)
     auth = base64.b64encode(f"{p.username}:{p.password}".encode()).decode() if p.username else None
     return p.hostname, p.port or 8080, auth
 
@@ -155,5 +168,9 @@ if __name__ == "__main__":
     os.close(log_fd)
 
     open(PIDFILE, "w").write(str(os.getpid()))
+    # Seed PROXYFILE from env so the file always reflects the initial upstream
+    initial = os.environ.get("HTTP_PROXY") or os.environ.get("http_proxy", "")
+    if initial:
+        open(PROXYFILE, "w").write(initial)
     print(f"Proxy relay listening on localhost:{port}", flush=True)
     ThreadingHTTPServer(("127.0.0.1", port), Handler).serve_forever()
