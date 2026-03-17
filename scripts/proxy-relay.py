@@ -188,17 +188,6 @@ if __name__ == "__main__":
     kill_existing()
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 18080
 
-    # Daemonize: fork and let parent exit so shell doesn't block
-    if os.fork() > 0:
-        os._exit(0)
-    os.setsid()
-
-    # Redirect stdout/stderr to log file to avoid polluting the parent terminal
-    log_fd = os.open(LOGFILE, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
-    os.dup2(log_fd, sys.stdout.fileno())
-    os.dup2(log_fd, sys.stderr.fileno())
-    os.close(log_fd)
-
     open(PIDFILE, "w").write(str(os.getpid()))
     print(f"Proxy relay listening on localhost:{port}", flush=True)
     ThreadingHTTPServer(("127.0.0.1", port), Handler).serve_forever()
