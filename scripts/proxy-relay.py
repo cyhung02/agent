@@ -94,5 +94,11 @@ if __name__ == "__main__":
         os._exit(0)
     os.setsid()
 
+    # Redirect stdio to /dev/null so parent's shell returns immediately
+    devnull = os.open(os.devnull, os.O_RDWR)
+    for fd in (0, 1, 2):
+        os.dup2(devnull, fd)
+    os.close(devnull)
+
     print(f"Proxy relay listening on localhost:{port}", flush=True)
     ThreadingHTTPServer(("127.0.0.1", port), Handler).serve_forever()
