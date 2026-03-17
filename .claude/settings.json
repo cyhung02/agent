@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 scripts/test-bind.py"
+            "command": "python3 scripts/test-serve.py"
           }
         ]
       }
