@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 scripts/test-scan.py"
+            "command": "python3 scripts/proxy-relay.py"
           }
         ]
       }
