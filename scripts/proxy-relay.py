@@ -19,7 +19,7 @@ _CACHE_TTL = 30.0  # seconds
 
 def _scan_env_manager_proxy() -> str:
     """Scan /proc for the most recently started environment-manager process and return its HTTP_PROXY."""
-    best_starttime = -1
+    best_starttime = -1.0
     best_url = ""
     try:
         for pid_str in os.listdir("/proc"):
@@ -30,12 +30,11 @@ def _scan_env_manager_proxy() -> str:
                 cmdline = open(f"/proc/{pid}/cmdline").read()
                 if "environment-manager" not in cmdline:
                     continue
-                # Field 22 (index 21) of /proc/{pid}/stat is starttime in clock ticks since boot
-                starttime = int(open(f"/proc/{pid}/stat").read().split()[21])
+                mtime = os.stat(f"/proc/{pid}").st_mtime
                 for var in open(f"/proc/{pid}/environ").read().split("\0"):
                     if var.startswith("HTTP_PROXY="):
-                        if starttime > best_starttime:
-                            best_starttime = starttime
+                        if mtime > best_starttime:
+                            best_starttime = mtime
                             best_url = var[11:]
                         break
             except OSError:
