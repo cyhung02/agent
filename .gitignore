@@ -1,3 +1,7 @@
 .agents/
-.claude/skills/
+.claude/skills/agent-browser
+.claude/skills/dogfood
+.claude/skills/electron
+.claude/skills/slack
+.claude/skills/vercel-sandbox
 skills-lock.json
