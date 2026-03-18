@@ -116,27 +116,8 @@ Extract details from a Tabelog restaurant page using a dedicated browser session
 1. Open a new session and navigate:
    playwright-cli -s=detail-<RANK> open "<URL>"
 
-2. Save the following to /tmp/extract_detail_<RANK>.js then run it
-   (use a unique filename per subagent to avoid collisions):
-   async page => {
-     const rows = Array.from(await page.$$('.rstinfo-table .rstinfo-table__item'));
-     const info = {};
-     for (const row of rows) {
-       const th = await row.$eval('.rstinfo-table__item-title', e => e.textContent.trim()).catch(() => null);
-       const td = await row.$eval('.rstinfo-table__item-value', e => e.innerText.trim()).catch(() => null);
-       if (th && td) info[th] = td;
-     }
-     if (Object.keys(info).length === 0) {
-       const fallback = Array.from(await page.$$('.c-table tr'));
-       for (const row of fallback) {
-         const th = await row.$eval('th', e => e.textContent.trim()).catch(() => null);
-         const td = await row.$eval('td', e => e.innerText.trim()).catch(() => null);
-         if (th && td) info[th] = td;
-       }
-     }
-     return JSON.stringify(info, null, 2);
-   }
-   Run: playwright-cli -s=detail-<RANK> run-code "$(cat /tmp/extract_detail_<RANK>.js)"
+2. Run the bundled extraction script:
+   playwright-cli -s=detail-<RANK> run-code "$(cat .claude/skills/tabelog-search/scripts/extract_detail.js)"
 
 3. Close the session: playwright-cli -s=detail-<RANK> close
 
