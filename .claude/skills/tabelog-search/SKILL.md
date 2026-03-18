@@ -36,11 +36,12 @@ Tabelog uses autocomplete to resolve area/station names into internal location I
 SNAP=$(ls -t .playwright-cli/page-*.yml | head -1)
 grep "エリア" "$SNAP"
 playwright-cli click e<AREA_REF>
-playwright-cli type "<location in Japanese, e.g. 心斎橋>"
+playwright-cli type "大阪駅"   # type the actual location name in Japanese
 sleep 1
 
+# Re-read snapshot after sleep — autocomplete suggestions load asynchronously
 SNAP=$(ls -t .playwright-cli/page-*.yml | head -1)
-grep "<location>" "$SNAP"
+grep "大阪駅" "$SNAP"   # grep for the text you just typed to find suggestions
 # Click the matching station/area suggestion:
 playwright-cli click e<SUGGESTION_REF>
 ```
@@ -82,13 +83,18 @@ playwright-cli click e<REVIEW_COUNT_REF>
 
 ## Step 6 — Extract restaurant list
 
-Use the bundled script. Pass `N` as the number of results the user requested (default 5 if unspecified):
+`playwright-cli run-code` expects a single expression (an arrow function), so you can't prepend `const` statements inline. Write to a temp file first, then run:
 
 ```bash
-playwright-cli run-code "const TOP_N = <N>; $(cat .claude/skills/tabelog-search/scripts/extract_list.js)"
+# Replace the default N=5 with the actual requested count (e.g. 3):
+sed 's/const N = typeof TOP_N.*/const N = 5;/' \
+  .claude/skills/tabelog-search/scripts/extract_list.js > /tmp/tbl_list.js
+playwright-cli run-code "$(cat /tmp/tbl_list.js)"
 ```
 
 This returns a JSON array with: `rank`, `name`, `score`, `reviews`, `badge` (百名店 or null), `url`.
+
+Note: the `name` field may have the rank number prepended (e.g. `"1北新地やまがた屋"`). Strip the leading digit when displaying.
 
 ## Step 7 — Fetch detail pages in parallel with subagents
 
@@ -151,7 +157,7 @@ Adjust the session name (`detail-1`, `detail-2`, …) and URL per restaurant. Co
 
 **Detail page (Step 7)**
 
-The `extract_detail.js` script reads the entire **店舗基本情報** table and returns all rows as key→value pairs. Primary selector: `.rstinfo-table .rstinfo-table__item` (th: `.rstinfo-table__item-title`, td: `.rstinfo-table__item-value`). Falls back to `.c-table tr` if the primary selector yields nothing.
+The `extract_detail.js` script reads the entire **店舗基本情報** table and returns all rows as key→value pairs. In practice, `.c-table tr` (with `th`/`td`) is what works on most pages. The `.rstinfo-table__item-title/.value` selectors are attempted first but often yield nothing.
 
 ## Score Reference
 
