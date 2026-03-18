@@ -1,97 +1,175 @@
+---
+name: tabelog-search
+description: Search for restaurants on tabelog.com (食べログ), Japan's largest restaurant review platform. Use this skill whenever the user wants to find restaurants in Japan — searching by area, station, cuisine type, ranking, or any combination. Covers tasks like "find top ramen near Shinsaibashi", "show me the best sushi in Ginza", "search tabelog for izakaya in Kyoto". Also handles sending results via LINE or other channels after searching.
+allowed-tools: Bash(playwright-cli:*), Agent
+---
+
 # Tabelog Restaurant Search Skill
 
-This is an automated browser-based workflow for searching restaurants on **tabelog.com**, Japan's largest restaurant review platform. Use **agent-browser** for all browser interactions.
+Workflow for searching restaurants on **tabelog.com** using `playwright-cli`.
+Bundled scripts are in the `scripts/` directory — use them instead of writing extraction code from scratch.
 
-## Key Parameters
+## Step 1 — Open Tabelog
 
-The skill requires:
-- **Location** (Japanese area/station name) — mandatory
-- **Cuisine type** — optional
-- **Sort method** — defaults to ranking by score
-- **Detail depth** — how many restaurants to open fully
-
-## Critical Steps
-
-### 1. Open tabelog.com and dismiss language popup
+The proxy is configured automatically at session start, so just open the browser:
 
 ```bash
-agent-browser open https://tabelog.com && agent-browser wait --load networkidle
-agent-browser snapshot -i
-# Find and click 「日本語」 button to dismiss the language popup
-agent-browser find text "日本語" click
-agent-browser wait --load networkidle
+playwright-cli open https://tabelog.com 2>&1 | tail -5
 ```
 
-### 2. Fill the area field via UI interaction
+## Step 2 — Dismiss language popup
+
+Read the snapshot and find the 「日本語」 element ref, then click it:
 
 ```bash
-agent-browser snapshot -i
-# Find the area/station input field, click it, then type the location
-agent-browser click @e<area-input>
-agent-browser fill @e<area-input> "<location>"
-agent-browser wait 500
-agent-browser snapshot -i
-# Select the autocomplete suggestion that matches the location
-agent-browser click @e<autocomplete-suggestion>
+SNAP=$(ls -t .playwright-cli/page-*.yml | head -1)
+grep "日本語" "$SNAP"
+# Click the ref shown (e.g. e1618):
+playwright-cli click e<REF>
 ```
 
-> **Critical**: Do NOT fill the area field by setting its value via JavaScript (`eval`), and do NOT submit the form via JavaScript. Both bypass autocomplete validation and trigger nationwide results or CAPTCHAs. The autocomplete suggestion click is essential for proper geolocation filtering.
+## Step 3 — Fill area via autocomplete (important)
 
-### 3. Submit search and verify results page
+Tabelog uses autocomplete to resolve area/station names into internal location IDs. Filling the field via JavaScript bypasses this and produces nationwide results or CAPTCHAs, so always use the UI flow below:
 
 ```bash
-agent-browser find role button click --name "検索"
-agent-browser wait --load networkidle
-# Verify the page title starts with the station/area name
-agent-browser get title
+SNAP=$(ls -t .playwright-cli/page-*.yml | head -1)
+grep "エリア" "$SNAP"
+playwright-cli click e<AREA_REF>
+playwright-cli type "大阪駅"   # type the actual location name in Japanese
+sleep 1
+
+# Re-read snapshot after sleep — autocomplete suggestions load asynchronously
+SNAP=$(ls -t .playwright-cli/page-*.yml | head -1)
+grep "大阪駅" "$SNAP"   # grep for the text you just typed to find suggestions
+# Click the matching station/area suggestion:
+playwright-cli click e<SUGGESTION_REF>
 ```
 
-### 4. Switch to score-based ranking tab
+## Step 4 — Fill keyword and search
+
+**If the user specified a cuisine or keyword**, fill the field, sleep, and check for autocomplete. If suggestions appear, click the best match (autocomplete resolves to internal IDs, same reason as Step 3). If not, click search directly.
+
+**If no keyword was specified** (user wants all genres), skip filling the keyword field and go straight to the search button.
 
 ```bash
-agent-browser snapshot -i
-# Click the "ランキング" (ranking) tab for score-based sort
-agent-browser find text "ランキング" click
-agent-browser wait --load networkidle
+SNAP=$(ls -t .playwright-cli/page-*.yml | head -1)
+grep "キーワード" "$SNAP"
+playwright-cli fill e<KEYWORD_REF> "焼肉"   # omit this line if no keyword
+sleep 1
+
+SNAP=$(ls -t .playwright-cli/page-*.yml | head -1)
+# Check if autocomplete dropdown appeared (only relevant when keyword was filled):
+grep "焼肉" "$SNAP"
+# If a suggestion matches, click it. Otherwise find and click the search button:
+grep "検索" "$SNAP"
+playwright-cli click e<SEARCH_BTN_REF>
 ```
 
-### 5. Extract restaurant list data
+## Step 5 — Sort order
+
+**Default: ランキング順（score-based）**
 
 ```bash
-agent-browser snapshot -i
-# Use eval with --stdin for complex extraction to avoid shell escaping issues
-agent-browser eval --stdin <<'EVALEOF'
-JSON.stringify(
-  Array.from(document.querySelectorAll(".list-rst__wrap")).map(card => ({
-    name: card.querySelector(".list-rst__rst-name")?.textContent?.trim(),
-    score: card.querySelector(".c-rating__val")?.textContent?.trim(),
-    reviews: card.querySelector(".list-rst__rvw-count")?.textContent?.trim(),
-    badge: card.querySelector(".c-shop-top-badge") ? "百名店" : null,
-    url: card.querySelector("a.list-rst__rst-name-target")?.href
-  }))
-)
-EVALEOF
+SNAP=$(ls -t .playwright-cli/page-*.yml | head -1)
+grep "ランキング" "$SNAP"
+playwright-cli click e<RANKING_REF>
 ```
 
-### 6. Open detail pages for in-depth info
+**If the user requests review-count ranking:** look for 「口コミが多い順」 instead.
 
 ```bash
-# For each restaurant to expand, open in a new tab
-agent-browser open <restaurant-url> && agent-browser wait --load networkidle
-agent-browser eval --stdin <<'EVALEOF'
-JSON.stringify({
-  intro: document.querySelector(".rstdtl-top__rst-intro")?.textContent?.trim(),
-  hours: document.querySelector(".rstdtl-top__info-table")?.innerText?.trim()
-})
-EVALEOF
-agent-browser back
-agent-browser wait --load networkidle
+grep "口コミが多い順" "$SNAP"
+playwright-cli click e<REVIEW_COUNT_REF>
 ```
+
+## Step 6 — Extract restaurant list
+
+`playwright-cli run-code` expects a single expression (an arrow function), so you can't prepend `const` statements inline. Write to a temp file first, then run:
+
+```bash
+# Replace the default N=5 with the actual requested count:
+sed 's/const N = typeof TOP_N.*/const N = 5;/' \
+  .claude/skills/tabelog-search/scripts/extract_list.js > /tmp/tbl_list.js
+playwright-cli run-code "$(cat /tmp/tbl_list.js)"
+```
+
+If the result is `[]`, the page may not have fully loaded (DNS cache overflow error is a known cause). Run `playwright-cli reload` and retry.
+
+This returns a JSON array with: `rank`, `name`, `score`, `reviews`, `badge` (百名店 or null), `url`.
+
+Note: the `name` field may have the rank number prepended (e.g. `"1北新地やまがた屋"`). Strip the leading digit when displaying.
+
+## Step 7 — Fetch detail pages in parallel with subagents
+
+Since each restaurant page is independent, launch one subagent per restaurant simultaneously — this is 4–5x faster than sequential fetching.
+
+Each subagent must use its own named session (`-s=detail-<rank>`) so they don't interfere with the main browser or each other. Close the session after extraction.
+
+The detail script reads all rows from the **店舗基本情報** table and returns them as a flat key→value object — you'll get whatever fields that page has (address, phone, hours, closed days, budget, etc.).
+
+For each restaurant, spawn an Agent with this prompt (replace `<RANK>` and `<URL>` with actual values):
+
+```
+Extract details from a Tabelog restaurant page using a dedicated browser session.
+
+1. Open a new session and navigate:
+   playwright-cli -s=detail-<RANK> open "<URL>"
+
+2. Save the following to /tmp/extract_detail_<RANK>.js then run it
+   (use a unique filename per subagent to avoid collisions):
+   async page => {
+     const rows = Array.from(await page.$$('.rstinfo-table .rstinfo-table__item'));
+     const info = {};
+     for (const row of rows) {
+       const th = await row.$eval('.rstinfo-table__item-title', e => e.textContent.trim()).catch(() => null);
+       const td = await row.$eval('.rstinfo-table__item-value', e => e.innerText.trim()).catch(() => null);
+       if (th && td) info[th] = td;
+     }
+     if (Object.keys(info).length === 0) {
+       const fallback = Array.from(await page.$$('.c-table tr'));
+       for (const row of fallback) {
+         const th = await row.$eval('th', e => e.textContent.trim()).catch(() => null);
+         const td = await row.$eval('td', e => e.innerText.trim()).catch(() => null);
+         if (th && td) info[th] = td;
+       }
+     }
+     return JSON.stringify(info, null, 2);
+   }
+   Run: playwright-cli -s=detail-<RANK> run-code "$(cat /tmp/extract_detail_<RANK>.js)"
+
+3. Close the session: playwright-cli -s=detail-<RANK> close
+
+4. Return the raw JSON result.
+```
+
+Collect all results and merge with the list data from Step 6.
+
+## CSS Selectors Reference
+
+**List page (Step 6)**
+
+| Field | Selector |
+|-------|----------|
+| Restaurant card | `.list-rst__wrap` |
+| Name | `.list-rst__rst-name` |
+| Score | `.c-rating__val` |
+| Review count | `.list-rst__rvw-count` |
+| 百名店 badge | `.c-shop-top-badge` |
+| Detail page link | `a.list-rst__rst-name-target` |
+
+**Detail page (Step 7)**
+
+The `extract_detail.js` script reads the entire **店舗基本情報** table and returns all rows as key→value pairs. In practice, `.c-table tr` (with `th`/`td`) is what works on most pages. The `.rstinfo-table__item-title/.value` selectors are attempted first but often yield nothing.
+
+## Score Reference
+
+| Score | Quality |
+|-------|---------|
+| 3.8+ | 優秀 |
+| 3.5–3.8 | 良好 |
+| 3.5 以下 | 普通 |
 
 ## Output Format
 
-Present findings in Traditional Chinese with:
-- Rankings and scores (3.5+ is good; 3.8+ is excellent)
-- Review counts
-- Highlight any 百名店 (Top 100) badges
-- Operating hours and budget range from detail pages
+Present results in Traditional Chinese (繁體中文) with rank, name, score, review count, 百名店 badge, address, phone, reservation status, intro, and Tabelog URL for each restaurant.
