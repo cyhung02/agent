@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "pipedream": {
+    "Pipedream": {
       "type": "http",
       "url": "https://mcp.pipedream.net/v2"
     }
