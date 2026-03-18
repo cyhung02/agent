@@ -55,7 +55,12 @@ unzip -oq "$ZIP_PATH" -d "$INSTALL_BASE"
 echo "==> Creating symlink in $BIN_DIR..." | tee -a "$LOG_FILE"
 ln -sf "$INSTALL_BASE/chrome-linux64/chrome" "$BIN_DIR/chrome"
 
-# 9. 安裝系統依賴
+# 9a. 建立 Playwright 預期路徑的軟連結 /opt/google/chrome/chrome
+echo "==> Creating symlink at /opt/google/chrome/chrome for Playwright..." | tee -a "$LOG_FILE"
+mkdir -p /opt/google/chrome
+ln -sf "$INSTALL_BASE/chrome-linux64/chrome" /opt/google/chrome/chrome
+
+# 10. 安裝系統依賴
 echo "==> Installing system dependencies..." | tee -a "$LOG_FILE"
 apt-get update -qq
 

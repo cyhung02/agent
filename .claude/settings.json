@@ -1,1 +1,34 @@
-{}
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "start",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash scripts/init.sh",
+            "timeout": 300,
+            "statusMessage": "Initializing environment..."
+          },
+          {
+            "type": "command",
+            "command": "bash scripts/update-playwright-proxy.sh",
+            "timeout": 30,
+            "statusMessage": "Updating Playwright proxy config..."
+          }
+        ]
+      },
+      {
+        "matcher": "resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash scripts/update-playwright-proxy.sh",
+            "timeout": 30,
+            "statusMessage": "Updating Playwright proxy config..."
+          }
+        ]
+      }
+    ]
+  }
+}
