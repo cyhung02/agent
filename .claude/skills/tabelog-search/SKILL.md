@@ -48,18 +48,20 @@ playwright-cli click e<SUGGESTION_REF>
 
 ## Step 4 — Fill keyword and search
 
-After filling the keyword, sleep briefly and check for autocomplete suggestions — if any appear, click the most relevant one (same reason as Step 3: autocomplete resolves to internal IDs). If no suggestions appear, proceed directly to clicking the search button.
+**If the user specified a cuisine or keyword**, fill the field, sleep, and check for autocomplete. If suggestions appear, click the best match (autocomplete resolves to internal IDs, same reason as Step 3). If not, click search directly.
+
+**If no keyword was specified** (user wants all genres), skip filling the keyword field and go straight to the search button.
 
 ```bash
 SNAP=$(ls -t .playwright-cli/page-*.yml | head -1)
 grep "キーワード" "$SNAP"
-playwright-cli fill e<KEYWORD_REF> "<cuisine, e.g. ラーメン>"
+playwright-cli fill e<KEYWORD_REF> "焼肉"   # omit this line if no keyword
 sleep 1
 
 SNAP=$(ls -t .playwright-cli/page-*.yml | head -1)
-# Check if autocomplete dropdown appeared:
-grep "<cuisine>" "$SNAP"
-# If a suggestion matches, click it. Otherwise:
+# Check if autocomplete dropdown appeared (only relevant when keyword was filled):
+grep "焼肉" "$SNAP"
+# If a suggestion matches, click it. Otherwise find and click the search button:
 grep "検索" "$SNAP"
 playwright-cli click e<SEARCH_BTN_REF>
 ```
@@ -86,11 +88,13 @@ playwright-cli click e<REVIEW_COUNT_REF>
 `playwright-cli run-code` expects a single expression (an arrow function), so you can't prepend `const` statements inline. Write to a temp file first, then run:
 
 ```bash
-# Replace the default N=5 with the actual requested count (e.g. 3):
+# Replace the default N=5 with the actual requested count:
 sed 's/const N = typeof TOP_N.*/const N = 5;/' \
   .claude/skills/tabelog-search/scripts/extract_list.js > /tmp/tbl_list.js
 playwright-cli run-code "$(cat /tmp/tbl_list.js)"
 ```
+
+If the result is `[]`, the page may not have fully loaded (DNS cache overflow error is a known cause). Run `playwright-cli reload` and retry.
 
 This returns a JSON array with: `rank`, `name`, `score`, `reviews`, `badge` (百名店 or null), `url`.
 
@@ -104,16 +108,16 @@ Each subagent must use its own named session (`-s=detail-<rank>`) so they don't 
 
 The detail script reads all rows from the **店舗基本情報** table and returns them as a flat key→value object — you'll get whatever fields that page has (address, phone, hours, closed days, budget, etc.).
 
-For each restaurant (e.g. rank 1), spawn an Agent with this prompt:
+For each restaurant, spawn an Agent with this prompt (replace `<RANK>` and `<URL>` with actual values):
 
 ```
 Extract details from a Tabelog restaurant page using a dedicated browser session.
 
 1. Open a new session and navigate:
-   playwright-cli -s=detail-1 open "https://tabelog.com/osaka/A2701/A270101/27011099/"
+   playwright-cli -s=detail-<RANK> open "<URL>"
 
-2. Run the extraction script (save to /tmp/extract_detail.js first):
-   Content of /tmp/extract_detail.js:
+2. Save the following to /tmp/extract_detail_<RANK>.js then run it
+   (use a unique filename per subagent to avoid collisions):
    async page => {
      const rows = Array.from(await page.$$('.rstinfo-table .rstinfo-table__item'));
      const info = {};
@@ -132,15 +136,14 @@ Extract details from a Tabelog restaurant page using a dedicated browser session
      }
      return JSON.stringify(info, null, 2);
    }
+   Run: playwright-cli -s=detail-<RANK> run-code "$(cat /tmp/extract_detail_<RANK>.js)"
 
-   Then run: playwright-cli -s=detail-1 run-code "$(cat /tmp/extract_detail.js)"
-
-3. Close the session: playwright-cli -s=detail-1 close
+3. Close the session: playwright-cli -s=detail-<RANK> close
 
 4. Return the raw JSON result.
 ```
 
-Adjust the session name (`detail-1`, `detail-2`, …) and URL per restaurant. Collect all results and merge with the list data from Step 6.
+Collect all results and merge with the list data from Step 6.
 
 ## CSS Selectors Reference
 
