@@ -47,16 +47,25 @@ playwright-cli click e<SUGGESTION_REF>
 
 ## Step 4 — Fill keyword and search
 
+After filling the keyword, sleep briefly and check for autocomplete suggestions — if any appear, click the most relevant one (same reason as Step 3: autocomplete resolves to internal IDs). If no suggestions appear, proceed directly to clicking the search button.
+
 ```bash
 SNAP=$(ls -t .playwright-cli/page-*.yml | head -1)
 grep "キーワード" "$SNAP"
 playwright-cli fill e<KEYWORD_REF> "<cuisine, e.g. ラーメン>"
+sleep 1
 
+SNAP=$(ls -t .playwright-cli/page-*.yml | head -1)
+# Check if autocomplete dropdown appeared:
+grep "<cuisine>" "$SNAP"
+# If a suggestion matches, click it. Otherwise:
 grep "検索" "$SNAP"
 playwright-cli click e<SEARCH_BTN_REF>
 ```
 
-## Step 5 — Switch to score-based ranking
+## Step 5 — Sort order
+
+**Default: ランキング順（score-based）**
 
 ```bash
 SNAP=$(ls -t .playwright-cli/page-*.yml | head -1)
@@ -64,12 +73,19 @@ grep "ランキング" "$SNAP"
 playwright-cli click e<RANKING_REF>
 ```
 
-## Step 6 — Extract restaurant list
-
-Use the bundled script (edit the `5` inside to change how many results to extract):
+**If the user requests review-count ranking:** look for 「口コミが多い順」 instead.
 
 ```bash
-playwright-cli run-code "$(cat .claude/skills/tabelog-search/scripts/extract_list.js)"
+grep "口コミが多い順" "$SNAP"
+playwright-cli click e<REVIEW_COUNT_REF>
+```
+
+## Step 6 — Extract restaurant list
+
+Use the bundled script. Pass `N` as the number of results the user requested (default 5 if unspecified):
+
+```bash
+playwright-cli run-code "const TOP_N = <N>; $(cat .claude/skills/tabelog-search/scripts/extract_list.js)"
 ```
 
 This returns a JSON array with: `rank`, `name`, `score`, `reviews`, `badge` (百名店 or null), `url`.
@@ -77,6 +93,8 @@ This returns a JSON array with: `rank`, `name`, `score`, `reviews`, `badge` (百
 ## Step 7 — Fetch detail pages in parallel with subagents
 
 Since each restaurant page is independent, launch one `Explore` subagent per restaurant simultaneously — this is 4–5x faster than sequential fetching and keeps the main context clean.
+
+The detail script reads all rows from the **店舗基本情報** table and returns them as a flat key→value object, so no need to hardcode specific field names. You'll get whatever fields that restaurant's page has (address, phone, hours, closed days, budget, etc.).
 
 For each restaurant, spawn an Agent with this prompt:
 
@@ -92,19 +110,20 @@ Collect all results and merge with the list data from Step 6.
 
 ## CSS Selectors Reference
 
-| Field | Selector / th label |
-|-------|---------------------|
+**List page (Step 6)**
+
+| Field | Selector |
+|-------|----------|
 | Restaurant card | `.list-rst__wrap` |
 | Name | `.list-rst__rst-name` |
 | Score | `.c-rating__val` |
 | Review count | `.list-rst__rvw-count` |
 | 百名店 badge | `.c-shop-top-badge` |
 | Detail page link | `a.list-rst__rst-name-target` |
-| Table rows (detail) | `.c-table tr` |
-| Phone th label | `お問い合わせ`（not `電話`） |
-| Address th label | `住所` |
-| Reservation th label | `予約`（exclude `ネット予約`） |
-| Intro/description | `.rstdtl-top__rst-intro`, `.pr-comment__text` |
+
+**Detail page (Step 7)**
+
+The `extract_detail.js` script reads the entire **店舗基本情報** table and returns all rows as key→value pairs. Primary selector: `.rstinfo-table .rstinfo-table__item` (th: `.rstinfo-table__item-title`, td: `.rstinfo-table__item-value`). Falls back to `.c-table tr` if the primary selector yields nothing.
 
 ## Score Reference
 

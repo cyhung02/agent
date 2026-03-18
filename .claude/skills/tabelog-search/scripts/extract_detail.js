@@ -1,27 +1,25 @@
-// Extract detail info from a single Tabelog restaurant page.
+// Extract all rows from the 店舗基本情報 table on a Tabelog restaurant detail page.
 // Usage: playwright-cli run-code "$(cat scripts/extract_detail.js)"
 // Must be run after navigating to the restaurant's detail page.
+//
+// Returns a flat object where keys are the th labels and values are the td text,
+// e.g. { "住所": "...", "お問い合わせ": "...", "営業時間": "...", "定休日": "..." }
 async page => {
-  const rows = Array.from(await page.$$('.c-table tr, .rstinfo-table tr'));
-  let address = null, phone = null, reserve = null;
+  const rows = Array.from(await page.$$('.rstinfo-table .rstinfo-table__item'));
+  const info = {};
   for (const row of rows) {
-    const th = await row.$eval('th', e => e.textContent.trim()).catch(() => '');
-    const td = await row.$eval('td', e => e.textContent.trim()).catch(() => '');
-    // Phone label is "お問い合わせ", not "電話"
-    if (th.includes('住所'))                              address = td.split('\n')[0].trim();
-    if (th.includes('お問い合わせ') || th.includes('電話')) phone   = td.split('\n')[0].trim();
-    if (th.includes('予約') && !th.includes('ネット予約')) reserve = td.split('\n')[0].trim();
+    const th = await row.$eval('.rstinfo-table__item-title', e => e.textContent.trim()).catch(() => null);
+    const td = await row.$eval('.rstinfo-table__item-value', e => e.innerText.trim()).catch(() => null);
+    if (th && td) info[th] = td;
   }
-  // Fallback for phone if not found in table
-  if (!phone) {
-    phone = await page.$eval(
-      '.rstdtl-side-yoyaku__tel strong',
-      e => e.textContent.trim()
-    ).catch(() => null);
+  // Fallback: generic c-table rows (some pages use a different structure)
+  if (Object.keys(info).length === 0) {
+    const fallback = Array.from(await page.$$('.c-table tr'));
+    for (const row of fallback) {
+      const th = await row.$eval('th', e => e.textContent.trim()).catch(() => null);
+      const td = await row.$eval('td', e => e.innerText.trim()).catch(() => null);
+      if (th && td) info[th] = td;
+    }
   }
-  const intro = await page.$eval(
-    '.rstdtl-top__rst-intro, .pr-comment__text',
-    e => e.textContent.trim()
-  ).catch(() => null);
-  return JSON.stringify({ address, phone, reserve, intro }, null, 2);
+  return JSON.stringify(info, null, 2);
 }
