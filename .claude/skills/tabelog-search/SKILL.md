@@ -92,21 +92,49 @@ This returns a JSON array with: `rank`, `name`, `score`, `reviews`, `badge` (百
 
 ## Step 7 — Fetch detail pages in parallel with subagents
 
-Since each restaurant page is independent, launch one `Explore` subagent per restaurant simultaneously — this is 4–5x faster than sequential fetching and keeps the main context clean.
+Since each restaurant page is independent, launch one subagent per restaurant simultaneously — this is 4–5x faster than sequential fetching.
 
-The detail script reads all rows from the **店舗基本情報** table and returns them as a flat key→value object, so no need to hardcode specific field names. You'll get whatever fields that restaurant's page has (address, phone, hours, closed days, budget, etc.).
+Each subagent must use its own named session (`-s=detail-<rank>`) so they don't interfere with the main browser or each other. Close the session after extraction.
 
-For each restaurant, spawn an Agent with this prompt:
+The detail script reads all rows from the **店舗基本情報** table and returns them as a flat key→value object — you'll get whatever fields that page has (address, phone, hours, closed days, budget, etc.).
+
+For each restaurant (e.g. rank 1), spawn an Agent with this prompt:
 
 ```
-Navigate to this Tabelog restaurant page and extract its details.
+Extract details from a Tabelog restaurant page using a dedicated browser session.
 
-1. Run: playwright-cli goto "<restaurant_url>"
-2. Run: playwright-cli run-code "$(cat .claude/skills/tabelog-search/scripts/extract_detail.js)"
-3. Return the raw JSON result.
+1. Open a new session and navigate:
+   playwright-cli -s=detail-1 open "https://tabelog.com/osaka/A2701/A270101/27011099/"
+
+2. Run the extraction script (save to /tmp/extract_detail.js first):
+   Content of /tmp/extract_detail.js:
+   async page => {
+     const rows = Array.from(await page.$$('.rstinfo-table .rstinfo-table__item'));
+     const info = {};
+     for (const row of rows) {
+       const th = await row.$eval('.rstinfo-table__item-title', e => e.textContent.trim()).catch(() => null);
+       const td = await row.$eval('.rstinfo-table__item-value', e => e.innerText.trim()).catch(() => null);
+       if (th && td) info[th] = td;
+     }
+     if (Object.keys(info).length === 0) {
+       const fallback = Array.from(await page.$$('.c-table tr'));
+       for (const row of fallback) {
+         const th = await row.$eval('th', e => e.textContent.trim()).catch(() => null);
+         const td = await row.$eval('td', e => e.innerText.trim()).catch(() => null);
+         if (th && td) info[th] = td;
+       }
+     }
+     return JSON.stringify(info, null, 2);
+   }
+
+   Then run: playwright-cli -s=detail-1 run-code "$(cat /tmp/extract_detail.js)"
+
+3. Close the session: playwright-cli -s=detail-1 close
+
+4. Return the raw JSON result.
 ```
 
-Collect all results and merge with the list data from Step 6.
+Adjust the session name (`detail-1`, `detail-2`, …) and URL per restaurant. Collect all results and merge with the list data from Step 6.
 
 ## CSS Selectors Reference
 
