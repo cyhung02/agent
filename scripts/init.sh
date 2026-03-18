@@ -2,10 +2,8 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
 echo "==> Installing Chrome for Testing..."
-bash "$SCRIPT_DIR/install-chrome.sh"
+curl -fsSL https://raw.githubusercontent.com/cyhung02/agent/main/scripts/install-chrome.sh | bash
 
 echo "==> Installing agent-browser CLI..."
 npm install -g agent-browser
