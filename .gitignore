@@ -6,3 +6,4 @@
 .claude/skills/vercel-sandbox
 skills-lock.json
 .playwright-cli/
+.playwright/

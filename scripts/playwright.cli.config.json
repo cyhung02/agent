@@ -1,0 +1,15 @@
+{
+  "browser": {
+    "browserName": "chromium",
+    "launchOptions": {
+      "channel": "chrome",
+      "headless": true,
+      "chromiumSandbox": false
+    },
+    "contextOptions": {
+      "viewport": null,
+      "ignoreHTTPSErrors": true
+    },
+    "isolated": false
+  }
+}
