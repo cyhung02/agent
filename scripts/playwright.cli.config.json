@@ -8,6 +8,6 @@
     },
     "contextOptions": {
       "ignoreHTTPSErrors": true
-    },
+    }
   }
 }
