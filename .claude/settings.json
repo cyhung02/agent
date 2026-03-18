@@ -6,15 +6,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash scripts/init.sh",
-            "timeout": 300,
-            "statusMessage": "Initializing environment..."
+            "command": "bash scripts/init.sh"
           },
           {
             "type": "command",
-            "command": "bash scripts/update-playwright-proxy.sh",
-            "timeout": 30,
-            "statusMessage": "Updating Playwright proxy config..."
+            "command": "bash scripts/update-playwright-proxy.sh"
           }
         ]
       },
@@ -23,9 +19,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash scripts/update-playwright-proxy.sh",
-            "timeout": 30,
-            "statusMessage": "Updating Playwright proxy config..."
+            "command": "bash scripts/update-playwright-proxy.sh"
           }
         ]
       }
