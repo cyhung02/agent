@@ -17,33 +17,6 @@ _proxy_cache: dict = {"url": "", "ts": 0.0}
 _CACHE_TTL = 30.0  # seconds
 
 
-def _scan_env_manager_proxy() -> str:
-    """Scan /proc for the most recently started environment-manager process and return its HTTP_PROXY."""
-    best_starttime = -1.0
-    best_url = ""
-    try:
-        for pid_str in os.listdir("/proc"):
-            if not pid_str.isdigit():
-                continue
-            pid = int(pid_str)
-            try:
-                cmdline = open(f"/proc/{pid}/cmdline").read()
-                if "environment-manager" not in cmdline:
-                    continue
-                mtime = os.stat(f"/proc/{pid}").st_mtime
-                for var in open(f"/proc/{pid}/environ").read().split("\0"):
-                    if var.startswith("HTTP_PROXY="):
-                        if mtime > best_starttime:
-                            best_starttime = mtime
-                            best_url = var[11:]
-                        break
-            except OSError:
-                continue
-    except OSError:
-        pass
-    return best_url
-
-
 def kill_existing():
     import time
     try:
@@ -69,15 +42,12 @@ def get_upstream():
     """Return (host, port, auth) for the upstream proxy, re-resolved up to every 30 s.
 
     Resolution order:
-      1. /proc scan for the live environment-manager process (picks up new session tokens)
-      2. $HTTP_PROXY / $http_proxy captured at daemon launch (last-resort fallback)
+      1. $HTTP_PROXY / $http_proxy captured at daemon launch
     """
     now = time.monotonic()
     with _proxy_lock:
         if now - _proxy_cache["ts"] >= _CACHE_TTL:
-            url = _scan_env_manager_proxy()
-            if not url:
-                url = os.environ.get("HTTP_PROXY") or os.environ.get("http_proxy", "")
+            url = os.environ.get("HTTP_PROXY") or os.environ.get("http_proxy", "")
             _proxy_cache["url"] = url
             _proxy_cache["ts"] = now
         url = _proxy_cache["url"]
