@@ -8,7 +8,4 @@ curl -fsSL https://raw.githubusercontent.com/cyhung02/agent/main/scripts/install
 echo "==> Installing Playwright CLI..."
 npm install -g @playwright/cli
 
-echo "==> Installing Playwright skills..."
-playwright-cli install --skills
-
 echo "==> Init complete."
