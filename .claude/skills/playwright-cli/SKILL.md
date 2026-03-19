@@ -6,6 +6,14 @@ allowed-tools: Bash(playwright-cli:*)
 
 # Browser Automation with playwright-cli
 
+## Requirement
+
+If playwright-cli is not installed on your system, run the following command to install it globally.
+
+```bash
+npm install -g @playwright/cli@latest
+```
+
 ## Quick start
 
 ```bash
