@@ -34,12 +34,14 @@ playwright-cli reads `~/.playwright/cli.config.json`. To ensure proper configura
 1. Verify you are running `playwright-cli` from the home directory (`~`).
 2. Check if `~/.playwright/cli.config.json` exists:
    - If **no**: copy from `scripts/cli.config.json` and run `scripts/update-playwright-proxy.sh`.
+3. Always run `playwright-cli` from the home directory (`~`).
 
 **playwright-cli cannot connect to external sites:**
 1. Verify you are running `playwright-cli` from the home directory (`~`).
 2. Check if `~/.playwright/cli.config.json` exists:
    - If **no**: copy from `scripts/cli.config.json` and run `scripts/update-playwright-proxy.sh`.
    - If **yes**: run `scripts/update-playwright-proxy.sh` to refresh the proxy settings.
+3. Always run `playwright-cli` from the home directory (`~`).
 
 ## Quick start
 
