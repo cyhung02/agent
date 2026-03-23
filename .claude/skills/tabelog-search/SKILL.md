@@ -11,39 +11,47 @@ Bundled scripts are in the `scripts/` directory — use them instead of writing 
 
 ## Step 1 — Open Tabelog
 
-The proxy is configured automatically at session start, so just open the browser:
+Always run `playwright-cli` from the home directory (`~`). If you encounter connection issues or `playwright-cli` fails to launch, refer to the `playwright-cli` skill for troubleshooting.
 
 ```bash
-playwright-cli open https://tabelog.com 2>&1 | tail -5
+cd ~ && playwright-cli open https://tabelog.com 2>&1 | tail -5
 ```
 
-## Step 2 — Dismiss language popup
+## Step 2 — Dismiss language popup (conditional)
 
-Read the snapshot and find the 「日本語」 element ref, then click it:
+Tabelog only shows a language selection popup on first visit. If the cookie already stores the Japanese preference, the popup won't appear — skip this step.
 
 ```bash
-SNAP=$(ls -t .playwright-cli/page-*.yml | head -1)
-grep "日本語" "$SNAP"
-# Click the ref shown (e.g. e1618):
+SNAP=$(ls -t ~/.playwright-cli/page-*.yml | head -1)
+grep "cursor=pointer" "$SNAP" | grep "日本語"
+# If a result appears, click that ref. If no result, skip this step.
 playwright-cli click e<REF>
 ```
 
 ## Step 3 — Fill area via autocomplete (important)
 
-Tabelog uses autocomplete to resolve area/station names into internal location IDs. Filling the field via JavaScript bypasses this and produces nationwide results or CAPTCHAs, so always use the UI flow below:
+Tabelog uses autocomplete to resolve area/station names into internal location IDs. Filling the field via JavaScript bypasses this and produces nationwide results or CAPTCHAs, so always use the UI flow below.
 
 ```bash
-SNAP=$(ls -t .playwright-cli/page-*.yml | head -1)
+SNAP=$(ls -t ~/.playwright-cli/page-*.yml | head -1)
 grep "エリア" "$SNAP"
 playwright-cli click e<AREA_REF>
 playwright-cli type "大阪駅"   # type the actual location name in Japanese
-sleep 1
+sleep 1.5
 
 # Re-read snapshot after sleep — autocomplete suggestions load asynchronously
-SNAP=$(ls -t .playwright-cli/page-*.yml | head -1)
+SNAP=$(ls -t ~/.playwright-cli/page-*.yml | head -1)
 grep "大阪駅" "$SNAP"   # grep for the text you just typed to find suggestions
 # Click the matching station/area suggestion:
 playwright-cli click e<SUGGESTION_REF>
+```
+
+**If the input field accumulates duplicate text** (e.g. `大阪駅大阪駅`), clear it first before typing:
+
+```bash
+playwright-cli run-code "async page => { const el = page.getByRole('textbox', { name: 'エリア・駅 [例:銀座、渋谷]' }); await el.selectText(); await page.keyboard.press('Delete'); }"
+playwright-cli type "大阪駅"
+sleep 1.5
 ```
 
 ## Step 4 — Fill keyword and search
@@ -66,46 +74,35 @@ grep "検索" "$SNAP"
 playwright-cli click e<SEARCH_BTN_REF>
 ```
 
-## Step 5 — Sort order
+## Step 5 — Sort order and filters (URL parameters)
 
-**Default: ランキング順（score-based）**
+After the search results page loads, build the final URL by appending the required parameters and navigate directly — no UI interaction needed.
 
-```bash
-SNAP=$(ls -t .playwright-cli/page-*.yml | head -1)
-grep "ランキング" "$SNAP"
-playwright-cli click e<RANKING_REF>
-```
+**Sort order parameters (`SrtT`):**
 
-**If the user requests review-count ranking:** look for 「口コミが多い順」 instead.
+| User request | `SrtT` value |
+|---|---|
+| 評分排序（default） | `rt` |
+| 評論數排序 | `rvcn` |
 
-```bash
-grep "口コミが多い順" "$SNAP"
-playwright-cli click e<REVIEW_COUNT_REF>
-```
-
-## Step 5.5 — Apply detailed filter conditions (optional)
-
-If the user wants to filter by dietary options, facilities, or other conditions, **use URL parameter injection** — it's more reliable than operating the dialog UI.
-
-### URL parameter approach (preferred)
-
-After sorting, read the current URL and append the filter parameter, then navigate directly:
-
-```bash
-# 1. Get the current URL
-CURRENT_URL=$(playwright-cli eval "window.location.href" | grep "^\"" | tr -d '"')
-
-# 2. Append the filter parameter and navigate:
-playwright-cli goto "${CURRENT_URL}&ChkVegetarianMenu=1"
-```
-
-Known URL parameters for common filters:
+**Filter parameters (optional):**
 
 | Filter | URL Parameter |
-|--------|---------------|
+|---|---|
 | Vegetarian menu available | `ChkVegetarianMenu=1` |
 
-After navigating, verify the filter is active by checking the page title or breadcrumb — it should contain the filter name (e.g., 「ベジタリアンメニュー」).
+```bash
+# Get the current URL after Step 4, then append the needed parameters:
+CURRENT_URL=$(playwright-cli eval "window.location.href" | grep "^\"" | tr -d '"')
+
+# Example: score ranking + vegetarian filter (sort_mode=1 is required for score ranking)
+playwright-cli goto "${CURRENT_URL}&SrtT=rt&sort_mode=1&ChkVegetarianMenu=1"
+
+# Example: review-count ranking only (sort_mode=1 not needed)
+playwright-cli goto "${CURRENT_URL}&SrtT=rvcn"
+```
+
+Verify by checking the page title — it should reflect the sort order and any active filters.
 
 ## Step 6 — Extract restaurant list
 
@@ -137,13 +134,13 @@ For each restaurant, spawn an Agent with this prompt (replace `<RANK>` and `<URL
 ```
 Extract details from a Tabelog restaurant page using a dedicated browser session.
 
-1. Open a new session and navigate:
-   playwright-cli -s=detail-<RANK> open "<URL>"
+1. Open a new session and navigate (always from ~):
+   cd ~ && playwright-cli -s=detail-<RANK> open "<URL>"
 
 2. Run the bundled extraction script:
-   playwright-cli -s=detail-<RANK> run-code "$(cat .claude/skills/tabelog-search/scripts/extract_detail.js)"
+   cd ~ && playwright-cli -s=detail-<RANK> run-code "$(cat /home/user/agent/.claude/skills/tabelog-search/scripts/extract_detail.js)"
 
-3. Close the session: playwright-cli -s=detail-<RANK> close
+3. Close the session: cd ~ && playwright-cli -s=detail-<RANK> close
 
 4. Return the raw JSON result.
 ```
