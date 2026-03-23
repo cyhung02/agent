@@ -104,10 +104,6 @@ Known URL parameters for common filters:
 | Filter | URL Parameter |
 |--------|---------------|
 | Vegetarian menu available | `ChkVegetarianMenu=1` |
-| Halal menu available | `ChkHalalMenu=1` |
-| Private rooms available | `ChkPrivateRoom=1` |
-| Non-smoking | `LstSmoking=1` |
-| Parking available | `ChkParking=1` |
 
 After navigating, verify the filter is active by checking the page title or breadcrumb — it should contain the filter name (e.g., 「ベジタリアンメニュー」).
 
