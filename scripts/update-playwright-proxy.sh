@@ -4,12 +4,7 @@ set -euo pipefail
 
 echo "==> Updating Playwright proxy config..."
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CWD="${INIT_CWD:-$(pwd)}"
-DST="$CWD/.playwright/cli.config.json"
-
-mkdir -p "$(dirname "$DST")"
-cp "$SCRIPT_DIR/playwright.cli.config.json" "$DST"
+DST="$HOME/.playwright/cli.config.json"
 
 python3 - <<PYEOF
 import json, os
@@ -24,7 +19,7 @@ proxy_url = os.environ.get("HTTP_PROXY", "")
 if proxy_url:
     parsed = urlparse(proxy_url)
     proxy_server = f"{parsed.scheme}://{parsed.hostname}:{parsed.port}"
-    config["browser"]["launchOptions"]["proxy"] = {
+    config.setdefault("browser", {}).setdefault("launchOptions", {})["proxy"] = {
         "server": proxy_server,
         "username": parsed.username or "",
         "password": parsed.password or ""
