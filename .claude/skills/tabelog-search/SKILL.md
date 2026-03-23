@@ -66,46 +66,35 @@ grep "検索" "$SNAP"
 playwright-cli click e<SEARCH_BTN_REF>
 ```
 
-## Step 5 — Sort order
+## Step 5 — Sort order and filters (URL parameters)
 
-**Default: ランキング順（score-based）**
+After the search results page loads, build the final URL by appending the required parameters and navigate directly — no UI interaction needed.
 
-```bash
-SNAP=$(ls -t .playwright-cli/page-*.yml | head -1)
-grep "ランキング" "$SNAP"
-playwright-cli click e<RANKING_REF>
-```
+**Sort order parameters (`SrtT`):**
 
-**If the user requests review-count ranking:** look for 「口コミが多い順」 instead.
+| User request | `SrtT` value |
+|---|---|
+| 評分排序（default） | `rt` |
+| 評論數排序 | `rvcn` |
 
-```bash
-grep "口コミが多い順" "$SNAP"
-playwright-cli click e<REVIEW_COUNT_REF>
-```
-
-## Step 5.5 — Apply detailed filter conditions (optional)
-
-If the user wants to filter by dietary options, facilities, or other conditions, **use URL parameter injection** — it's more reliable than operating the dialog UI.
-
-### URL parameter approach (preferred)
-
-After sorting, read the current URL and append the filter parameter, then navigate directly:
-
-```bash
-# 1. Get the current URL
-CURRENT_URL=$(playwright-cli eval "window.location.href" | grep "^\"" | tr -d '"')
-
-# 2. Append the filter parameter and navigate:
-playwright-cli goto "${CURRENT_URL}&ChkVegetarianMenu=1"
-```
-
-Known URL parameters for common filters:
+**Filter parameters (optional):**
 
 | Filter | URL Parameter |
-|--------|---------------|
+|---|---|
 | Vegetarian menu available | `ChkVegetarianMenu=1` |
 
-After navigating, verify the filter is active by checking the page title or breadcrumb — it should contain the filter name (e.g., 「ベジタリアンメニュー」).
+```bash
+# Get the current URL after Step 4, then append the needed parameters:
+CURRENT_URL=$(playwright-cli eval "window.location.href" | grep "^\"" | tr -d '"')
+
+# Example: score ranking + vegetarian filter
+playwright-cli goto "${CURRENT_URL}&SrtT=rt&sort_mode=1&ChkVegetarianMenu=1"
+
+# Example: review-count ranking only
+playwright-cli goto "${CURRENT_URL}&SrtT=rvcn"
+```
+
+Verify by checking the page title — it should reflect the sort order and any active filters.
 
 ## Step 6 — Extract restaurant list
 
