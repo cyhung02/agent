@@ -111,26 +111,6 @@ Known URL parameters for common filters:
 
 After navigating, verify the filter is active by checking the page title or breadcrumb — it should contain the filter name (e.g., 「ベジタリアンメニュー」).
 
-### UI dialog fallback (for filters without a known URL parameter)
-
-If the filter has no known URL parameter, fall back to the 「詳細条件」 dialog:
-
-```bash
-SNAP=$(ls -t .playwright-cli/page-*.yml | head -1)
-grep "詳細条件" "$SNAP"
-playwright-cli click e<DETAILS_BTN_REF>   # use the first one that appears
-
-# Find and check the checkbox:
-SNAP=$(ls -t .playwright-cli/page-*.yml | head -1)
-grep "ベジタリアン\|ハラール\|個室\|禁煙\|駐車場" "$SNAP"
-playwright-cli check e<CHECKBOX_REF>
-
-# Click 検索する inside the dialog to apply:
-SNAP=$(ls -t .playwright-cli/page-*.yml | head -1)
-grep "検索する" "$SNAP"
-playwright-cli click e<SEARCH_BTN_REF>
-```
-
 ## Step 6 — Extract restaurant list
 
 `playwright-cli run-code` expects a single expression (an arrow function), so you can't prepend `const` statements inline. Write to a temp file first, then run:
