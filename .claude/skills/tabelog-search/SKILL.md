@@ -83,6 +83,49 @@ grep "口コミが多い順" "$SNAP"
 playwright-cli click e<REVIEW_COUNT_REF>
 ```
 
+## Step 5.5 — Apply detailed filter conditions (optional)
+
+If the user wants to filter by dietary options, facilities, or other conditions (e.g., vegetarian menu, halal, private rooms, non-smoking, parking), use the 「詳細条件」panel after sorting.
+
+```bash
+# After sorting, grep for the 詳細条件 button and click it:
+SNAP=$(ls -t .playwright-cli/page-*.yml | head -1)
+grep "詳細条件" "$SNAP"
+playwright-cli click e<DETAILS_BTN_REF>   # use the first one that appears
+```
+
+A dialog titled 「検索条件を変更する」 will appear. Find and check the desired options:
+
+```bash
+SNAP=$(ls -t .playwright-cli/page-*.yml | head -1)
+# Look for the specific filter checkbox, e.g.:
+grep "ベジタリアン\|ハラール\|個室\|禁煙\|駐車場" "$SNAP"
+playwright-cli check e<CHECKBOX_REF>
+
+# Verify it's actually checked (important — the snapshot may not show [checked]):
+playwright-cli run-code "async page => { const cb = await page.getByRole('checkbox', { name: 'ベジタリアンメニューあり' }); return await cb.isChecked(); }"
+```
+
+Common filter options (actual availability depends on the area):
+
+| Checkbox label | Meaning |
+|----------------|---------|
+| `ベジタリアンメニューあり` | Vegetarian menu available |
+| `ハラールメニューあり` | Halal menu available |
+| `個室あり` | Private rooms available |
+| `禁煙` | Non-smoking |
+| `駐車場あり` | Parking available |
+
+Then click 「検索する」 inside the dialog to apply:
+
+```bash
+SNAP=$(ls -t .playwright-cli/page-*.yml | head -1)
+grep "検索する" "$SNAP"
+playwright-cli click e<SEARCH_BTN_REF>
+```
+
+The results page heading and URL will reflect the applied filter (e.g., "ベジタリアンメニューあり" appears in the breadcrumb link), confirming the filter is active.
+
 ## Step 6 — Extract restaurant list
 
 `playwright-cli run-code` expects a single expression (an arrow function), so you can't prepend `const` statements inline. Write to a temp file first, then run:
