@@ -19,31 +19,47 @@ playwright-cli open https://tabelog.com 2>&1 | tail -5
 
 ## Step 2 — Dismiss language popup
 
-Read the snapshot and find the 「日本語」 element ref, then click it:
+Tabelog detects non-Japanese environments and shows a language overlay (`c-overlay js-lang-change-section-overlay`) that blocks all clicks. Use JS to remove it, then find and click the 「日本語」 element:
 
 ```bash
+# Remove the overlay first
+playwright-cli run-code "async page => { await page.evaluate(() => { document.querySelectorAll('.c-overlay').forEach(e => e.remove()); }); }"
+
 SNAP=$(ls -t .playwright-cli/page-*.yml | head -1)
 grep "日本語" "$SNAP"
-# Click the ref shown (e.g. e1618):
+# Look for a ref with [cursor=pointer] — if the listitem has no link, try the parent element.
+# Click the ref shown (e.g. e1619):
 playwright-cli click e<REF>
 ```
 
+If the overlay reappears on subsequent clicks (e.g. when clicking the area input in Step 3), remove it again with the same `run-code` command before clicking.
+
 ## Step 3 — Fill area via autocomplete (important)
 
-Tabelog uses autocomplete to resolve area/station names into internal location IDs. Filling the field via JavaScript bypasses this and produces nationwide results or CAPTCHAs, so always use the UI flow below:
+Tabelog uses autocomplete to resolve area/station names into internal location IDs. Filling the field via JavaScript bypasses this and produces nationwide results or CAPTCHAs, so always use the UI flow below.
+
+If the overlay from Step 2 reappears and blocks the click, run the `run-code` overlay removal again before clicking.
 
 ```bash
 SNAP=$(ls -t .playwright-cli/page-*.yml | head -1)
 grep "エリア" "$SNAP"
 playwright-cli click e<AREA_REF>
 playwright-cli type "大阪駅"   # type the actual location name in Japanese
-sleep 1
+sleep 1.5
 
 # Re-read snapshot after sleep — autocomplete suggestions load asynchronously
 SNAP=$(ls -t .playwright-cli/page-*.yml | head -1)
 grep "大阪駅" "$SNAP"   # grep for the text you just typed to find suggestions
 # Click the matching station/area suggestion:
 playwright-cli click e<SUGGESTION_REF>
+```
+
+**If the input field accumulates duplicate text** (e.g. `大阪駅大阪駅`), clear it first before typing:
+
+```bash
+playwright-cli run-code "async page => { const el = page.getByRole('textbox', { name: 'エリア・駅 [例:銀座、渋谷]' }); await el.selectText(); await page.keyboard.press('Delete'); }"
+playwright-cli type "大阪駅"
+sleep 1.5
 ```
 
 ## Step 4 — Fill keyword and search
