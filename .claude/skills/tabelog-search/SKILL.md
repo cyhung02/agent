@@ -11,7 +11,7 @@ Bundled scripts are in the `scripts/` directory — use them instead of writing 
 
 ## Step 1 — Open Tabelog
 
-The proxy is configured automatically at session start. Always run `playwright-cli` from the home directory (`~`):
+Always run `playwright-cli` from the home directory (`~`). If you encounter connection issues or `playwright-cli` fails to launch, refer to the `playwright-cli` skill for troubleshooting.
 
 ```bash
 cd ~ && playwright-cli open https://tabelog.com 2>&1 | tail -5
