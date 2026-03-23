@@ -2,8 +2,11 @@
 
 set -euo pipefail
 
+# 取得 scripts 資料夾的絕對路徑
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
 echo "==> Installing Chrome for Testing..."
-curl -fsSL https://raw.githubusercontent.com/cyhung02/agent/main/scripts/install-chrome.sh | bash
+bash "$SCRIPT_DIR/install-chrome.sh"
 
 echo "==> Installing Playwright CLI..."
 npm install -g @playwright/cli
