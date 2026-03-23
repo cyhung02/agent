@@ -11,44 +11,36 @@ Bundled scripts are in the `scripts/` directory — use them instead of writing 
 
 ## Step 1 — Open Tabelog
 
-The proxy is configured automatically at session start, so just open the browser:
+The proxy is configured automatically at session start. Always run `playwright-cli` from the home directory (`~`):
 
 ```bash
-playwright-cli open https://tabelog.com 2>&1 | tail -5
+cd ~ && playwright-cli open https://tabelog.com 2>&1 | tail -5
 ```
 
-## Step 2 — Dismiss language popup
+## Step 2 — Dismiss language popup (conditional)
 
-Tabelog detects non-Japanese environments and shows a language overlay (`c-overlay js-lang-change-section-overlay`) that blocks all clicks. Use JS to remove it, then find and click the 「日本語」 element:
+Tabelog only shows a language selection popup on first visit. If the cookie already stores the Japanese preference, the popup won't appear — skip this step.
 
 ```bash
-# Remove the overlay first
-playwright-cli run-code "async page => { await page.evaluate(() => { document.querySelectorAll('.c-overlay').forEach(e => e.remove()); }); }"
-
-SNAP=$(ls -t .playwright-cli/page-*.yml | head -1)
-grep "日本語" "$SNAP"
-# Look for a ref with [cursor=pointer] — if the listitem has no link, try the parent element.
-# Click the ref shown (e.g. e1619):
+SNAP=$(ls -t ~/.playwright-cli/page-*.yml | head -1)
+grep "cursor=pointer" "$SNAP" | grep "日本語"
+# If a result appears, click that ref. If no result, skip this step.
 playwright-cli click e<REF>
 ```
-
-If the overlay reappears on subsequent clicks (e.g. when clicking the area input in Step 3), remove it again with the same `run-code` command before clicking.
 
 ## Step 3 — Fill area via autocomplete (important)
 
 Tabelog uses autocomplete to resolve area/station names into internal location IDs. Filling the field via JavaScript bypasses this and produces nationwide results or CAPTCHAs, so always use the UI flow below.
 
-If the overlay from Step 2 reappears and blocks the click, run the `run-code` overlay removal again before clicking.
-
 ```bash
-SNAP=$(ls -t .playwright-cli/page-*.yml | head -1)
+SNAP=$(ls -t ~/.playwright-cli/page-*.yml | head -1)
 grep "エリア" "$SNAP"
 playwright-cli click e<AREA_REF>
 playwright-cli type "大阪駅"   # type the actual location name in Japanese
 sleep 1.5
 
 # Re-read snapshot after sleep — autocomplete suggestions load asynchronously
-SNAP=$(ls -t .playwright-cli/page-*.yml | head -1)
+SNAP=$(ls -t ~/.playwright-cli/page-*.yml | head -1)
 grep "大阪駅" "$SNAP"   # grep for the text you just typed to find suggestions
 # Click the matching station/area suggestion:
 playwright-cli click e<SUGGESTION_REF>
@@ -103,10 +95,10 @@ After the search results page loads, build the final URL by appending the requir
 # Get the current URL after Step 4, then append the needed parameters:
 CURRENT_URL=$(playwright-cli eval "window.location.href" | grep "^\"" | tr -d '"')
 
-# Example: score ranking + vegetarian filter
+# Example: score ranking + vegetarian filter (sort_mode=1 is required for score ranking)
 playwright-cli goto "${CURRENT_URL}&SrtT=rt&sort_mode=1&ChkVegetarianMenu=1"
 
-# Example: review-count ranking only
+# Example: review-count ranking only (sort_mode=1 not needed)
 playwright-cli goto "${CURRENT_URL}&SrtT=rvcn"
 ```
 
@@ -142,13 +134,13 @@ For each restaurant, spawn an Agent with this prompt (replace `<RANK>` and `<URL
 ```
 Extract details from a Tabelog restaurant page using a dedicated browser session.
 
-1. Open a new session and navigate:
-   playwright-cli -s=detail-<RANK> open "<URL>"
+1. Open a new session and navigate (always from ~):
+   cd ~ && playwright-cli -s=detail-<RANK> open "<URL>"
 
 2. Run the bundled extraction script:
-   playwright-cli -s=detail-<RANK> run-code "$(cat .claude/skills/tabelog-search/scripts/extract_detail.js)"
+   cd ~ && playwright-cli -s=detail-<RANK> run-code "$(cat /home/user/agent/.claude/skills/tabelog-search/scripts/extract_detail.js)"
 
-3. Close the session: playwright-cli -s=detail-<RANK> close
+3. Close the session: cd ~ && playwright-cli -s=detail-<RANK> close
 
 4. Return the raw JSON result.
 ```
