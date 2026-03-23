@@ -14,6 +14,33 @@ If playwright-cli is not installed on your system, run the following command to 
 npm install -g @playwright/cli@latest
 ```
 
+### Configuration Setup
+
+playwright-cli reads `~/.playwright/cli.config.json`. To ensure proper configuration:
+
+1. Copy `scripts/cli.config.json` to `~/.playwright/cli.config.json`:
+   ```bash
+   cp scripts/cli.config.json ~/.playwright/cli.config.json
+   ```
+2. Due to Claude Sandbox environment restrictions, playwright-cli requires a proxy to connect to external networks. Run the proxy setup script:
+   ```bash
+   bash scripts/update-playwright-proxy.sh
+   ```
+3. Always run `playwright-cli` from the home directory (`~`).
+
+### Troubleshooting
+
+**Chrome reports it needs to run in a no-sandbox environment:**
+1. Verify you are running `playwright-cli` from the home directory (`~`).
+2. Check if `~/.playwright/cli.config.json` exists:
+   - If **no**: copy from `scripts/cli.config.json` and run `scripts/update-playwright-proxy.sh`.
+
+**playwright-cli cannot connect to external sites:**
+1. Verify you are running `playwright-cli` from the home directory (`~`).
+2. Check if `~/.playwright/cli.config.json` exists:
+   - If **no**: copy from `scripts/cli.config.json` and run `scripts/update-playwright-proxy.sh`.
+   - If **yes**: run `scripts/update-playwright-proxy.sh` to refresh the proxy settings.
+
 ## Quick start
 
 ```bash
