@@ -83,6 +83,30 @@ grep "口コミが多い順" "$SNAP"
 playwright-cli click e<REVIEW_COUNT_REF>
 ```
 
+## Step 5.5 — Apply detailed filter conditions (optional)
+
+If the user wants to filter by dietary options, facilities, or other conditions, **use URL parameter injection** — it's more reliable than operating the dialog UI.
+
+### URL parameter approach (preferred)
+
+After sorting, read the current URL and append the filter parameter, then navigate directly:
+
+```bash
+# 1. Get the current URL
+CURRENT_URL=$(playwright-cli eval "window.location.href" | grep "^\"" | tr -d '"')
+
+# 2. Append the filter parameter and navigate:
+playwright-cli goto "${CURRENT_URL}&ChkVegetarianMenu=1"
+```
+
+Known URL parameters for common filters:
+
+| Filter | URL Parameter |
+|--------|---------------|
+| Vegetarian menu available | `ChkVegetarianMenu=1` |
+
+After navigating, verify the filter is active by checking the page title or breadcrumb — it should contain the filter name (e.g., 「ベジタリアンメニュー」).
+
 ## Step 6 — Extract restaurant list
 
 `playwright-cli run-code` expects a single expression (an arrow function), so you can't prepend `const` statements inline. Write to a temp file first, then run:
