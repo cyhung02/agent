@@ -59,7 +59,7 @@ sleep 1.5
 
 ## Step 4 — Fill keyword and search
 
-> **⚠️ IMPORTANT: Do NOT enter vegetarian-related keywords (e.g. ベジタリアン, 菜食, ヴィーガン, etc.) in the keyword field.**
+> **⚠️ IMPORTANT: Do NOT enter vegetarian-related keywords (e.g. ベジタリアン) in the keyword field.**
 > Vegetarian filtering is handled exclusively via the URL parameter `ChkVegetarianMenu=1` in **Step 5**. Adding it as a keyword here will produce poor or irrelevant results.
 
 **If the user specified a cuisine or keyword**, fill the field, sleep, and check for autocomplete. If suggestions appear, click the best match (autocomplete resolves to internal IDs, same reason as Step 3). If not, click search directly.
