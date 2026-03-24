@@ -5,8 +5,7 @@ set -euo pipefail
 echo "==> Installing Chrome for Testing ..."
 bash scripts/install-chrome.sh
 
-echo "==> Installing Playwright CLI ..."
-npm install -g @playwright/cli
+bash .claude/skills/playwright-cli/scripts/install-playwright-cli.sh
 
 echo "==> Installing Agent Configurations ..."
 mkdir -p $HOME/.claude

@@ -14,10 +14,10 @@ Bundled scripts are in the `scripts/` directory — use them instead of writing 
 
 ## Step 1 — Open Tabelog
 
-Always run `playwright-cli` from the home directory (`~`). If you encounter connection issues or `playwright-cli` fails to launch, refer to the `playwright-cli` skill for troubleshooting.
+If you encounter connection issues or `playwright-cli` fails to launch, refer to the `playwright-cli` skill for troubleshooting.
 
 ```bash
-cd ~ && playwright-cli open https://tabelog.com 2>&1 | tail -5
+playwright-cli open https://tabelog.com 2>&1 | tail -5
 ```
 
 ## Step 2 — Dismiss language popup (conditional)
@@ -140,13 +140,13 @@ For each restaurant, spawn an Agent with this prompt (replace `<RANK>` and `<URL
 ```
 Extract details from a Tabelog restaurant page using a dedicated browser session.
 
-1. Open a new session and navigate (always from ~):
-   cd ~ && playwright-cli -s=detail-<RANK> open "<URL>"
+1. Open a new session and navigate:
+   playwright-cli -s=detail-<RANK> open "<URL>"
 
 2. Run the bundled extraction script:
-   cd ~ && playwright-cli -s=detail-<RANK> run-code "$(cat /home/user/agent/.claude/skills/tabelog-search/scripts/extract_detail.js)"
+   playwright-cli -s=detail-<RANK> run-code "$(cat /home/user/agent/.claude/skills/tabelog-search/scripts/extract_detail.js)"
 
-3. Close the session: cd ~ && playwright-cli -s=detail-<RANK> close
+3. Close the session: playwright-cli -s=detail-<RANK> close
 
 4. Return the raw JSON result.
 ```
