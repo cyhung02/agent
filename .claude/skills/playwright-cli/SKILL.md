@@ -8,10 +8,10 @@ allowed-tools: Bash(playwright-cli:*)
 
 ## Requirement
 
-If playwright-cli is not installed on your system, run the following command to install it globally.
+If playwright-cli is not installed on your system, run the install script:
 
 ```bash
-npm install -g @playwright/cli@latest
+bash scripts/install-playwright-cli.sh
 ```
 
 ### Configuration Setup
@@ -26,22 +26,18 @@ playwright-cli reads `~/.playwright/cli.config.json`. To ensure proper configura
    ```bash
    bash scripts/update-playwright-proxy.sh
    ```
-3. Always run `playwright-cli` from the home directory (`~`).
 
 ### Troubleshooting
 
 **Chrome reports it needs to run in a no-sandbox environment:**
-1. Verify you are running `playwright-cli` from the home directory (`~`).
-2. Check if `~/.playwright/cli.config.json` exists:
+1. Check if `~/.playwright/cli.config.json` exists:
    - If **no**: copy from `scripts/cli.config.json` and run `scripts/update-playwright-proxy.sh`.
-3. Always run `playwright-cli` from the home directory (`~`).
+2. Ensure the home-directory wrapper is installed by running `bash scripts/install-playwright-cli.sh`.
 
 **playwright-cli cannot connect to external sites:**
-1. Verify you are running `playwright-cli` from the home directory (`~`).
-2. Check if `~/.playwright/cli.config.json` exists:
+1. Check if `~/.playwright/cli.config.json` exists:
    - If **no**: copy from `scripts/cli.config.json` and run `scripts/update-playwright-proxy.sh`.
    - If **yes**: run `scripts/update-playwright-proxy.sh` to refresh the proxy settings.
-3. Always run `playwright-cli` from the home directory (`~`).
 
 ## Quick start
 
