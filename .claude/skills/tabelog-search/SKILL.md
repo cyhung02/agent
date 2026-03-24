@@ -4,7 +4,7 @@ description: Search for restaurants on tabelog.com (食べログ), Japan's large
 allowed-tools: Bash(playwright-cli:*), Agent
 ---
 
-> **⚠️ Prerequisite: Before using this skill, you MUST first read and ensure the `playwright-cli` skill is properly set up and functional.**
+> **⚠️ Prerequisite: Before using this skill, you MUST first read the `playwright-cli` skill.**
 > If `playwright-cli` fails to launch or has connection issues, follow the troubleshooting steps in that skill document before proceeding with this workflow.
 
 # Tabelog Restaurant Search Skill
