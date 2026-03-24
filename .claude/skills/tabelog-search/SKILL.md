@@ -31,9 +31,17 @@ grep "cursor=pointer" "$SNAP" | grep "日本語"
 playwright-cli click e<REF>
 ```
 
+**If clicking fails due to the overlay intercepting pointer events**, the `日本語` listitem itself may also be blocked by the overlay layer (`.c-overlay.js-lang-change-section-overlay`). In that case, hide it via JavaScript first, then proceed to Step 3 directly:
+
+```bash
+playwright-cli run-code "async page => { await page.evaluate(() => { const overlay = document.querySelector('.c-overlay.js-lang-change-section-overlay'); if (overlay) overlay.style.display = 'none'; }); }"
+```
+
 ## Step 3 — Fill area via autocomplete (important)
 
 Tabelog uses autocomplete to resolve area/station names into internal location IDs. Filling the field via JavaScript bypasses this and produces nationwide results or CAPTCHAs, so always use the UI flow below.
+
+> **🚫 NEVER guess or fabricate area codes or URLs.** Tabelog's internal area codes (e.g. `A1404`, `A140402`) are opaque and cannot be reliably inferred from geography or sub-area names. Always obtain the search URL by going through the autocomplete UI — the resulting URL will contain the correct codes. Constructing URLs manually from guessed codes will silently return wrong-area results with no error.
 
 ```bash
 SNAP=$(ls -t ~/.playwright-cli/page-*.yml | head -1)
@@ -144,12 +152,14 @@ Extract details from a Tabelog restaurant page using a dedicated browser session
    playwright-cli -s=detail-<RANK> open "<URL>"
 
 2. Run the bundled extraction script:
-   playwright-cli -s=detail-<RANK> run-code "$(cat /home/user/agent/.claude/skills/tabelog-search/scripts/extract_detail.js)"
+   playwright-cli -s=detail-<RANK> run-code "$(cat /root/.claude/skills/tabelog-search/scripts/extract_detail.js)"
 
 3. Close the session: playwright-cli -s=detail-<RANK> close
 
 4. Return the raw JSON result.
 ```
+
+> **⚠️ Script path:** Always use `/root/.claude/skills/tabelog-search/scripts/extract_detail.js`. Do NOT use `/home/user/agent/.claude/...` — that path does not exist and will cause the subagent to fail or waste many tool calls searching for the file.
 
 Collect all results and merge with the list data from Step 6.
 
@@ -173,10 +183,18 @@ The `extract_detail.js` script reads the entire **店舗基本情報** table and
 ## Score Reference
 
 | Score | Quality |
-|-------|---------|
+|-------|--------|
 | 3.8+ | 優秀 |
 | 3.5–3.8 | 良好 |
 | 3.5 以下 | 普通 |
+
+## Critical Rules — Do NOT Hallucinate
+
+> **🚫 Never fabricate restaurant URLs or recommend restaurants not found in search results.**
+>
+> All restaurant URLs presented to the user must come directly from the tabelog search result pages (Step 6) or detail pages (Step 7). Do NOT recall restaurant names or URLs from training data and present them as search results — tabelog URLs use opaque numeric IDs that cannot be reliably reconstructed from memory and may point to a completely different (or closed) business.
+>
+> If search results don't include an obvious specialist restaurant (e.g. a dedicated しらすや for しらす丼), report what was actually found and say so clearly. Do not supplement with URLs guessed from memory.
 
 ## Output Format
 
