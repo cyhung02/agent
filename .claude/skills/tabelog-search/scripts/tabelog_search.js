@@ -8,6 +8,13 @@
 //   Mode 2 - Full search (requires exact strings from Mode 1):
 //     node tabelog_search.js --mode search --area "大阪市" [--keyword "焼肉・ホルモン"] [--n 5] [--sort rt]
 
+// Allow require() to find globally-installed packages (e.g. playwright)
+const Module = require('module');
+const path = require('path');
+process.env.NODE_PATH = (process.env.NODE_PATH ? process.env.NODE_PATH + ':' : '')
+  + path.resolve(process.execPath, '../../lib/node_modules');
+Module._initPaths();
+
 const { chromium } = require('playwright');
 const { URL } = require('url');
 
