@@ -157,9 +157,9 @@ async function modeSearch() {
     const name    = rawName ? rawName.replace(/^\d+/, '').trim() : null; // strip leading rank digit
     const score   = await c.$eval('.c-rating__val', e => e.textContent.trim()).catch(() => null);
     const reviews = await c.$eval('.list-rst__rvw-count', e => e.textContent.trim()).catch(() => null);
-    const badge   = await c.$('.c-shop-top-badge').catch(() => null);
+    const awards  = await c.$$eval('.list-rst__award-tooltip', els => els.map(e => e.innerText.trim())).catch(() => []);
     const url     = await c.$eval('a.list-rst__rst-name-target', e => e.href).catch(() => null);
-    restaurants.push({ rank: i + 1, name, score, reviews, badge: badge ? '百名店' : null, url });
+    restaurants.push({ rank: i + 1, name, score, reviews, awards: awards.length ? awards : null, url });
   }
 
   // Extract details in parallel
