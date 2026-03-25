@@ -173,8 +173,12 @@ async function modeSearch() {
           }
         }
 
-        // スコアと口コミ
+        // スコア・店舗PR・口コミ
         const score = await detailPage.$eval('.rdheader-rating__score-val', e => e.innerText.trim()).catch(() => null);
+        const prTitle = await detailPage.$eval('.pr-comment-title', e => e.innerText.trim()).catch(() => null);
+        const prBody  = await detailPage.$eval('.pr-comment', e => e.innerText.trim()).catch(() => null);
+        const intro = prTitle || prBody ? { title: prTitle, body: prBody } : null;
+
         const reviewItems = await detailPage.$$('.rstdtl-top-rvwlst__list > li');
         const reviews = [];
         for (const item of reviewItems) {
@@ -186,7 +190,7 @@ async function modeSearch() {
           if (title || text) reviews.push({ title, text });
         }
 
-        return { ...r, detail: { score, 店舗情報: info, 口コミ: reviews } };
+        return { ...r, detail: { score, intro, 店舗情報: info, 口コミ: reviews } };
       } catch (e) {
         return { ...r, detail: { error: e.message } };
       } finally {
