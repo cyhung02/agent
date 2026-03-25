@@ -195,11 +195,11 @@ async function modeSearch() {
         // 受賞歴（完全リスト）
         const awardsRaw = await detailPage.$$eval('.rstinfo-table-badge-award__tooltip', els => els.map(e => e.innerText.trim())).catch(() => []);
         const formatAward = (s) => {
-          const award = s.match(/The Tabelog Award (\d{4}) (\w+)/);
+          const award = s.match(/The Tabelog Award (\d{4}) (Gold|Silver|Bronze)/);
           if (award) return `${award[1]} ${award[2]}`;
-          const hyaku = s.match(/(\d{4})/);
+          const hyaku = s.match(/百名店 (\d{4})/);
           if (hyaku) return `${hyaku[1]} 百名店`;
-          return s;
+          return s; // fallback: return raw string so nothing is lost
         };
         const awards = awardsRaw.length ? awardsRaw.map(formatAward) : null;
 
