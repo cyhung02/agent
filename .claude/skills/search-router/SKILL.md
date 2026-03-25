@@ -429,6 +429,8 @@ genuinely need the full document.
 
 ## How to Call from bash_tool
 
+> ⚠️ **Do NOT pipe to `jq`** — it may not be installed. Read the raw JSON output directly; Claude can parse JSON natively.
+
 ```bash
 # Search
 curl -s -X POST "https://api.exa.ai/search" \
@@ -451,7 +453,7 @@ curl -s -X POST "https://api.exa.ai/contents" \
   }'
 ```
 
-Parse the result with `jq` or Python `json.loads()`. Key fields:
+Read the raw JSON output directly. Key fields:
 - `results[].url` — the source URL
 - `results[].highlights[]` — key excerpts (if requested)
 - `results[].text` — full text (if requested)
