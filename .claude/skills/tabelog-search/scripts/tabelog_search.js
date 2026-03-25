@@ -135,12 +135,26 @@ async function modeSearch() {
   const sortParam = sort === 'rt' ? `SrtT=rt&sort_mode=1` : `SrtT=${sort}`;
   await page.goto(`${currentUrl}${separator}${sortParam}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
 
+  // Helpers for cleaning extracted text
+  const stripNoise = (text, patterns) => {
+    if (!text) return text;
+    let t = text;
+    for (const p of patterns) t = t.replace(p, '').trim();
+    return t || null;
+  };
+  const normalizeKey = (key) => key ? key.replace(/\s+/g, '') : key;
+  const SKIP_KEYS = new Set(['初投稿者', '最近の編集者']);
+  const ADDR_NOISE = /\n+\s*(大きな地図を見る|周辺のお店を探す|このお店は「.*?」から移転.*)/gs;
+  const BUDGET_NOISE = /\n+\s*利用金額分布を見る/g;
+  const REVIEW_NOISE = /\s*\.\.\.?\s*詳細を見る\s*$/;
+
   // Extract restaurant list from search results page
   const cards = await page.$$('.list-rst__wrap');
   const restaurants = [];
   for (let i = 0; i < Math.min(n, cards.length); i++) {
     const c = cards[i];
-    const name    = await c.$eval('.list-rst__rst-name', e => e.textContent.trim()).catch(() => null);
+    const rawName = await c.$eval('.list-rst__rst-name', e => e.textContent.trim()).catch(() => null);
+    const name    = rawName ? rawName.replace(/^\d+/, '').trim() : null; // strip leading rank digit
     const score   = await c.$eval('.c-rating__val', e => e.textContent.trim()).catch(() => null);
     const reviews = await c.$eval('.list-rst__rvw-count', e => e.textContent.trim()).catch(() => null);
     const badge   = await c.$('.c-shop-top-badge').catch(() => null);
@@ -162,19 +176,24 @@ async function modeSearch() {
         for (const row of rows) {
           const th = await row.$eval('.rstinfo-table__item-title', e => e.textContent.trim()).catch(() => null);
           const td = await row.$eval('.rstinfo-table__item-value', e => e.innerText.trim()).catch(() => null);
-          if (th && td) info[th] = td;
+          const key = normalizeKey(th);
+          if (key && td && !SKIP_KEYS.has(key)) {
+            info[key] = stripNoise(td, [ADDR_NOISE, BUDGET_NOISE]);
+          }
         }
         if (Object.keys(info).length === 0) {
           const fallback = await detailPage.$$('.c-table tr');
           for (const row of fallback) {
             const th = await row.$eval('th', e => e.textContent.trim()).catch(() => null);
             const td = await row.$eval('td', e => e.innerText.trim()).catch(() => null);
-            if (th && td) info[th] = td;
+            const key = normalizeKey(th);
+            if (key && td && !SKIP_KEYS.has(key)) {
+              info[key] = stripNoise(td, [ADDR_NOISE, BUDGET_NOISE]);
+            }
           }
         }
 
-        // スコア・店舗PR・口コミ
-        const score = await detailPage.$eval('.rdheader-rating__score-val', e => e.innerText.trim()).catch(() => null);
+        // 店舗PR・口コミ
         const prTitle = await detailPage.$eval('.pr-comment-title', e => e.innerText.trim()).catch(() => null);
         const prBody  = await detailPage.$eval('.pr-comment', e => e.innerText.trim()).catch(() => null);
         const intro = prTitle || prBody ? { title: prTitle, body: prBody } : null;
@@ -187,10 +206,11 @@ async function modeSearch() {
             const p = els.find(e => e.innerText.trim().length > 20 && !/ピックアップ/.test(e.innerText));
             return p ? p.innerText.trim() : null;
           }).catch(() => null);
-          if (title || text) reviews.push({ title, text });
+          const cleanText = text ? text.replace(/\s*\.\.\.?\s*詳細を見る\s*$/, '').trim() : null;
+          if (title || cleanText) reviews.push({ title, text: cleanText });
         }
 
-        return { ...r, detail: { score, intro, 店舗情報: info, 口コミ: reviews } };
+        return { ...r, detail: { intro, 店舗情報: info, 口コミ: reviews } };
       } catch (e) {
         return { ...r, detail: { error: e.message } };
       } finally {
