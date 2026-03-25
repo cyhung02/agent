@@ -429,10 +429,10 @@ genuinely need the full document.
 
 ## How to Call from bash_tool
 
-> ⚠️ **Never pipe curl output to `jq`** — it may not be installed. Use Python to parse JSON instead.
+> ⚠️ **Do NOT pipe to `jq`** — it may not be installed. Read the raw JSON output directly; Claude can parse JSON natively.
 
 ```bash
-# Search — parse response with Python
+# Search
 curl -s -X POST "https://api.exa.ai/search" \
   -H "Content-Type: application/json" \
   -H "x-api-key: $EXA_API_KEY" \
@@ -441,33 +441,19 @@ curl -s -X POST "https://api.exa.ai/search" \
     "type": "auto",
     "numResults": 5,
     "contents": { "highlights": { "maxCharacters": 4000 } }
-  }' | python3 -c "
-import sys, json
-data = json.load(sys.stdin)
-for r in data.get('results', []):
-    print(r.get('url'))
-    for h in r.get('highlights', []):
-        print(' ', h)
-"
+  }'
 
-# Fetch known URL — parse response with Python
+# Fetch known URL
 curl -s -X POST "https://api.exa.ai/contents" \
   -H "Content-Type: application/json" \
   -H "x-api-key: $EXA_API_KEY" \
   -d '{
     "urls": ["https://example.com"],
     "highlights": { "maxCharacters": 3000 }
-  }' | python3 -c "
-import sys, json
-data = json.load(sys.stdin)
-for r in data.get('results', []):
-    print(r.get('url'))
-    for h in r.get('highlights', []):
-        print(' ', h)
-"
+  }'
 ```
 
-Parse the result with Python `json.loads()` — **do NOT use `jq`** as it may not be available. Key fields:
+Read the raw JSON output directly. Key fields:
 - `results[].url` — the source URL
 - `results[].highlights[]` — key excerpts (if requested)
 - `results[].text` — full text (if requested)
