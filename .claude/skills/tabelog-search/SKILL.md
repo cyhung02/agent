@@ -143,7 +143,14 @@ Each subagent must use its own named session (`-s=detail-<rank>`) so they don't 
 
 The detail script reads all rows from the **店舗基本情報** table and returns them as a flat key→value object — you'll get whatever fields that page has (address, phone, hours, closed days, budget, etc.).
 
-For each restaurant, spawn an Agent with this prompt (replace `<RANK>` and `<URL>` with actual values):
+Before spawning subagents, resolve the script path:
+
+```bash
+DETAIL_SCRIPT=$(find ~/.claude -name "extract_detail.js" 2>/dev/null | head -1)
+echo "$DETAIL_SCRIPT"
+```
+
+For each restaurant, spawn an Agent with this prompt (replace `<RANK>`, `<URL>`, and `<DETAIL_SCRIPT>` with actual values):
 
 ```
 Extract details from a Tabelog restaurant page using a dedicated browser session.
@@ -152,14 +159,12 @@ Extract details from a Tabelog restaurant page using a dedicated browser session
    playwright-cli -s=detail-<RANK> open "<URL>"
 
 2. Run the bundled extraction script:
-   playwright-cli -s=detail-<RANK> run-code "$(cat /root/.claude/skills/tabelog-search/scripts/extract_detail.js)"
+   playwright-cli -s=detail-<RANK> run-code "$(cat <DETAIL_SCRIPT>)"
 
 3. Close the session: playwright-cli -s=detail-<RANK> close
 
 4. Return the raw JSON result.
 ```
-
-> **⚠️ Script path:** Always use `/root/.claude/skills/tabelog-search/scripts/extract_detail.js`. Do NOT use `/home/user/agent/.claude/...` — that path does not exist and will cause the subagent to fail or waste many tool calls searching for the file.
 
 Collect all results and merge with the list data from Step 6.
 
