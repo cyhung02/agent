@@ -111,13 +111,12 @@ async function modeSearch() {
   // Fill area - find and click the exact match in autocomplete
   const areaSuggestions = await getSuggestions(page, '#sa', area);
   const areaMatch = areaSuggestions.find(s => s === area);
-  if (areaMatch) {
-    await page.locator('li.js-header-search-suggest-items', { hasText: areaMatch }).first().click();
-  } else {
-    // No exact match - press Enter and hope for the best
-    console.warn(`Warning: no exact area match found for "${area}", suggestions were: ${areaSuggestions.join(', ')}`);
-    await page.keyboard.press('Enter');
+  if (!areaMatch) {
+    await browser.close();
+    console.error(JSON.stringify({ error: `No exact area match for "${area}"`, area_suggestions: areaSuggestions }, null, 2));
+    process.exit(1);
   }
+  await page.locator('li.js-header-search-suggest-items', { hasText: areaMatch }).first().click();
   await page.waitForTimeout(500);
 
   // Fill keyword
