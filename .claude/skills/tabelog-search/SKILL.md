@@ -141,7 +141,10 @@ Since each restaurant page is independent, launch one subagent per restaurant si
 
 Each subagent must use its own named session (`-s=detail-<rank>`) so they don't interfere with the main browser or each other. Close the session after extraction.
 
-The detail script reads all rows from the **店舗基本情報** table and returns them as a flat key→value object — you'll get whatever fields that page has (address, phone, hours, closed days, budget, etc.).
+The detail script returns a JSON object with three fields:
+- `score`: the restaurant's overall rating score
+- `店舗情報`: flat key→value pairs from the **店舗基本情報** table (address, phone, hours, closed days, budget, etc.)
+- `口コミ`: array of `{ title, text }` from reviews shown on the page
 
 Before spawning subagents, resolve the script path:
 
@@ -183,7 +186,7 @@ Collect all results and merge with the list data from Step 6.
 
 **Detail page (Step 7)**
 
-The `extract_detail.js` script reads the entire **店舗基本情報** table and returns all rows as key→value pairs. In practice, `.c-table tr` (with `th`/`td`) is what works on most pages. The `.rstinfo-table__item-title/.value` selectors are attempted first but often yield nothing.
+The `extract_detail.js` script returns `{ score, 店舗情報, 口コミ }`. For 店舗情報, `.rstinfo-table__item-title/.value` is attempted first; `.c-table tr` (with `th`/`td`) is used as fallback and is what works on most pages. 口コミ are extracted from `.rstdtl-top-rvwlst__list > li` as `{ title, text }` pairs.
 
 ## Score Reference
 
