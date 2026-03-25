@@ -157,9 +157,8 @@ async function modeSearch() {
     const name    = rawName ? rawName.replace(/^\d+/, '').trim() : null; // strip leading rank digit
     const score   = await c.$eval('.c-rating__val', e => e.textContent.trim()).catch(() => null);
     const reviews = await c.$eval('.list-rst__rvw-count', e => e.textContent.trim()).catch(() => null);
-    const awards  = await c.$$eval('.list-rst__award-tooltip', els => els.map(e => e.innerText.trim())).catch(() => []);
     const url     = await c.$eval('a.list-rst__rst-name-target', e => e.href).catch(() => null);
-    restaurants.push({ rank: i + 1, name, score, reviews, awards: awards.length ? awards : null, url });
+    restaurants.push({ rank: i + 1, name, score, reviews, url });
   }
 
   // Extract details in parallel
@@ -193,6 +192,10 @@ async function modeSearch() {
           }
         }
 
+        // 受賞歴（完全リスト）
+        const awardsRaw = await detailPage.$$eval('.rstinfo-table-badge-award__tooltip', els => els.map(e => e.innerText.trim())).catch(() => []);
+        const awards = awardsRaw.length ? awardsRaw : null;
+
         // 店舗PR・口コミ
         const prTitle = await detailPage.$eval('.pr-comment-title', e => e.innerText.trim()).catch(() => null);
         const prBody  = await detailPage.$eval('.pr-comment', e => e.innerText.trim()).catch(() => null);
@@ -210,7 +213,7 @@ async function modeSearch() {
           if (title || cleanText) reviews.push({ title, text: cleanText });
         }
 
-        return { ...r, detail: { intro, 店舗情報: info, 口コミ: reviews } };
+        return { ...r, detail: { awards, intro, 店舗情報: info, 口コミ: reviews } };
       } catch (e) {
         return { ...r, detail: { error: e.message } };
       } finally {
