@@ -20,18 +20,18 @@ If you encounter connection issues or `playwright-cli` fails to launch, refer to
 playwright-cli open https://tabelog.com 2>&1 | tail -5
 ```
 
-## Step 2 — Dismiss language popup (conditional)
+## Step 2 — Set language to Japanese
 
-Tabelog only shows a language selection popup on first visit. If the cookie already stores the Japanese preference, the popup won't appear — skip this step.
+Try to select 日本語 from the language popup (it may not appear if the preference is already stored), then always remove the overlay.
 
 ```bash
 SNAP=$(ls -t ~/.playwright-cli/page-*.yml | head -1)
 grep "cursor=pointer" "$SNAP" | grep "日本語"
-# If a result appears, click that ref. If no result, skip this step.
+# If a result appears, click that ref. If no result, skip the click.
 playwright-cli click e<REF>
 ```
 
-After clicking, check if the language overlay is still present and remove it if so:
+Remove the overlay (safe to run even if it doesn't exist):
 
 ```bash
 playwright-cli run-code "async page => { await page.evaluate(() => { const overlay = document.querySelector('.c-overlay.js-lang-change-section-overlay'); if (overlay) overlay.style.display = 'none'; }); }"
