@@ -135,34 +135,58 @@ async function modeSearch() {
   const sortParam = sort === 'rt' ? `SrtT=rt&sort_mode=1` : `SrtT=${sort}`;
   await page.goto(`${currentUrl}${separator}${sortParam}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
 
-  // Extract restaurant list
-  // extract_list.js is a Playwright Node.js function (uses page.$$, $eval etc.)
-  // — call it directly with page, not via page.evaluate()
-  const listScript = require('fs').readFileSync(
-    require('path').join(__dirname, 'extract_list.js'), 'utf8'
-  );
-  const patchedScript = listScript.replace(
-    /const N = typeof TOP_N.*/,
-    `const N = ${n};`
-  );
-  const listFn = eval(`(${patchedScript})`);
-  const listJson = await listFn(page);
-  const restaurants = JSON.parse(listJson);
+  // Extract restaurant list from search results page
+  const cards = await page.$$('.list-rst__wrap');
+  const restaurants = [];
+  for (let i = 0; i < Math.min(n, cards.length); i++) {
+    const c = cards[i];
+    const name    = await c.$eval('.list-rst__rst-name', e => e.textContent.trim()).catch(() => null);
+    const score   = await c.$eval('.c-rating__val', e => e.textContent.trim()).catch(() => null);
+    const reviews = await c.$eval('.list-rst__rvw-count', e => e.textContent.trim()).catch(() => null);
+    const badge   = await c.$('.c-shop-top-badge').catch(() => null);
+    const url     = await c.$eval('a.list-rst__rst-name-target', e => e.href).catch(() => null);
+    restaurants.push({ rank: i + 1, name, score, reviews, badge: badge ? '百名店' : null, url });
+  }
 
   // Extract details in parallel
-  const detailScript = require('fs').readFileSync(
-    require('path').join(__dirname, 'extract_detail.js'), 'utf8'
-  );
-  const detailFn = eval(`(${detailScript})`);
-
   const details = await Promise.all(
     restaurants.map(async (r) => {
       if (!r.url) return { ...r, detail: null };
       const detailPage = await context.newPage();
       try {
         await detailPage.goto(r.url, { waitUntil: 'domcontentloaded', timeout: 30000 });
-        const raw = await detailFn(detailPage);
-        return { ...r, detail: JSON.parse(raw) };
+
+        // 店舗基本情報
+        const info = {};
+        const rows = await detailPage.$$('.rstinfo-table .rstinfo-table__item');
+        for (const row of rows) {
+          const th = await row.$eval('.rstinfo-table__item-title', e => e.textContent.trim()).catch(() => null);
+          const td = await row.$eval('.rstinfo-table__item-value', e => e.innerText.trim()).catch(() => null);
+          if (th && td) info[th] = td;
+        }
+        if (Object.keys(info).length === 0) {
+          const fallback = await detailPage.$$('.c-table tr');
+          for (const row of fallback) {
+            const th = await row.$eval('th', e => e.textContent.trim()).catch(() => null);
+            const td = await row.$eval('td', e => e.innerText.trim()).catch(() => null);
+            if (th && td) info[th] = td;
+          }
+        }
+
+        // スコアと口コミ
+        const score = await detailPage.$eval('.rdheader-rating__score-val', e => e.innerText.trim()).catch(() => null);
+        const reviewItems = await detailPage.$$('.rstdtl-top-rvwlst__list > li');
+        const reviews = [];
+        for (const item of reviewItems) {
+          const title = await item.$eval('h4', e => e.innerText.trim()).catch(() => null);
+          const text  = await item.$$eval('p', els => {
+            const p = els.find(e => e.innerText.trim().length > 20 && !/ピックアップ/.test(e.innerText));
+            return p ? p.innerText.trim() : null;
+          }).catch(() => null);
+          if (title || text) reviews.push({ title, text });
+        }
+
+        return { ...r, detail: { score, 店舗情報: info, 口コミ: reviews } };
       } catch (e) {
         return { ...r, detail: { error: e.message } };
       } finally {
