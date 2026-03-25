@@ -1,209 +1,97 @@
 ---
 name: tabelog-search
-description: Search for restaurants on tabelog.com (食べログ), Japan's largest restaurant review platform. Use this skill whenever the user wants to find restaurants in Japan — searching by area, station, cuisine type, ranking, or any combination. Covers tasks like "find top ramen near Shinsaibashi", "show me the best sushi in Ginza", "search tabelog for izakaya in Kyoto". Also handles sending results via LINE or other channels after searching.
-allowed-tools: Bash(playwright-cli:*), Agent
+description: Search for restaurants on tabelog.com (食べログ), Japan's largest restaurant review platform. Use this skill whenever the user wants to find restaurants in Japan — searching by area, station, cuisine type, ranking, or any combination. Covers tasks like "find top ramen near Shinsaibashi", "show me the best sushi in Ginza", "search tabelog for izakaya in Kyoto". Also handles filtering by vegetarian menu, sorting by score or review count, and sending results via LINE or other channels after searching.
+allowed-tools: Bash
 ---
-
-> **⚠️ Prerequisite: Before using this skill, you MUST first read the `playwright-cli` skill.**
-> If `playwright-cli` fails to launch or has connection issues, follow the troubleshooting steps in that skill document before proceeding with this workflow.
 
 # Tabelog Restaurant Search Skill
 
-Workflow for searching restaurants on **tabelog.com** using `playwright-cli`.
-Bundled scripts are in the `scripts/` directory — use them instead of writing extraction code from scratch.
+Search tabelog.com using the bundled `tabelog_search.js` script. The script handles all browser automation internally — no manual playwright steps needed.
 
-## Step 1 — Open Tabelog
+## Overview: Two-Mode Design
 
-If you encounter connection issues or `playwright-cli` fails to launch, refer to the `playwright-cli` skill for troubleshooting.
+Tabelog uses autocomplete to resolve area and keyword input into internal IDs. You cannot construct URLs manually or type free text and get reliable results. To handle this correctly, the workflow is split into two modes:
 
-```bash
-playwright-cli open https://tabelog.com 2>&1 | tail -5
+- **Mode 1 (suggest)**: Fetches autocomplete suggestions for area and keyword. You examine the results and decide which values to use.
+- **Mode 2 (search)**: Executes the full search with your chosen values and returns restaurant details.
+
+The script path is:
+```
+.claude/skills/tabelog-search/scripts/tabelog_search.js
 ```
 
-## Step 2 — Set language to Japanese
+---
 
-Try to select 日本語 from the language popup (it may not appear if the preference is already stored), then always remove the overlay.
-
-```bash
-SNAP=$(ls -t ~/.playwright-cli/page-*.yml | head -1)
-grep "cursor=pointer" "$SNAP" | grep "日本語"
-# If a result appears, click that ref. If no result, skip the click.
-playwright-cli click e<REF>
-```
-
-Remove the overlay (safe to run even if it doesn't exist):
+## Step 1 — Run Mode 1: Get Suggestions
 
 ```bash
-playwright-cli run-code "async page => { await page.evaluate(() => { const overlay = document.querySelector('.c-overlay.js-lang-change-section-overlay'); if (overlay) overlay.style.display = 'none'; }); }"
+node .claude/skills/tabelog-search/scripts/tabelog_search.js \
+  --mode suggest \
+  --area "大阪" \
+  --keyword "焼肉"   # omit if user didn't specify a cuisine/keyword
 ```
 
-## Step 3 — Fill area via autocomplete (important)
+Returns JSON:
+```json
+{
+  "area_suggestions": ["大阪市", "大阪駅", "西区(大阪市)", ...],
+  "keyword_suggestions": ["焼肉・ホルモン", "焼肉", "焼肉 やまと", ...]
+}
+```
 
-Tabelog uses autocomplete to resolve area/station names into internal location IDs. Filling the field via JavaScript bypasses this and produces nationwide results or CAPTCHAs, so always use the UI flow below.
+`keyword_suggestions` may be empty for genre-level terms like "ラーメン" — this is normal. Tabelog only autocompletes specific restaurant names, not all genre categories.
 
-> **🚫 NEVER guess or fabricate area codes or URLs.** Tabelog's internal area codes (e.g. `A1404`, `A140402`) are opaque and cannot be reliably inferred from geography or sub-area names. Always obtain the search URL by going through the autocomplete UI — the resulting URL will contain the correct codes. Constructing URLs manually from guessed codes will silently return wrong-area results with no error.
+---
+
+## Step 2 — Choose Area and Keyword
+
+**Area (required):** Pick the entry that best matches the user's intent. Mode 2 requires an exact string from `area_suggestions` — do not modify it.
+
+**Keyword (optional):** Apply this logic:
+- If `keyword_suggestions` contains a **genre category** that matches the user's intent (e.g. `"焼肉・ホルモン"`, `"カフェ・喫茶店"`), use it as an exact match.
+- If suggestions only contain **restaurant names**, skip the exact match and pass the user's raw keyword instead (Mode 2 will press Enter and search as free text).
+- If `keyword_suggestions` is empty, pass the user's raw keyword as free text.
+- If the user didn't specify a keyword, omit `--keyword` entirely.
+
+---
+
+## Step 3 — Run Mode 2: Full Search
 
 ```bash
-SNAP=$(ls -t ~/.playwright-cli/page-*.yml | head -1)
-grep "エリア" "$SNAP"
-playwright-cli click e<AREA_REF>
-playwright-cli type "大阪駅"   # type the actual location name in Japanese
-sleep 1.5
-
-# Re-read snapshot after sleep — autocomplete suggestions load asynchronously
-SNAP=$(ls -t ~/.playwright-cli/page-*.yml | head -1)
-grep "大阪駅" "$SNAP"   # grep for the text you just typed to find suggestions
-# Click the matching station/area suggestion:
-playwright-cli click e<SUGGESTION_REF>
+node .claude/skills/tabelog-search/scripts/tabelog_search.js \
+  --mode search \
+  --area "大阪市" \
+  --keyword "焼肉・ホルモン" \   # omit if no keyword
+  --n 5 \                        # number of results (default: 5)
+  --sort rt \                    # rt = score (default), rvcn = review count
+  --vegetarian                   # add only if user requested vegetarian filter
 ```
 
-**If the input field accumulates duplicate text** (e.g. `大阪駅大阪駅`), clear it first before typing:
+**Sort values:**
 
-```bash
-playwright-cli run-code "async page => { const el = page.getByRole('textbox', { name: 'エリア・駅 [例:銀座、渋谷]' }); await el.selectText(); await page.keyboard.press('Delete'); }"
-playwright-cli type "大阪駅"
-sleep 1.5
-```
-
-## Step 4 — Fill keyword and search
-
-> **⚠️ IMPORTANT: Do NOT enter vegetarian-related keywords (e.g. ベジタリアン) in the keyword field.**
-> Vegetarian filtering is handled exclusively via the URL parameter `ChkVegetarianMenu=1` in **Step 5**. Adding it as a keyword here will produce poor or irrelevant results.
-
-**If the user specified a cuisine or keyword**, fill the field, sleep, and check for autocomplete. If suggestions appear, click the best match (autocomplete resolves to internal IDs, same reason as Step 3). If not, click search directly.
-
-**If no keyword was specified** (user wants all genres), skip filling the keyword field and go straight to the search button.
-
-```bash
-SNAP=$(ls -t .playwright-cli/page-*.yml | head -1)
-grep "キーワード" "$SNAP"
-playwright-cli fill e<KEYWORD_REF> "焼肉"   # omit this line if no keyword
-sleep 1
-
-SNAP=$(ls -t .playwright-cli/page-*.yml | head -1)
-# Check if autocomplete dropdown appeared (only relevant when keyword was filled):
-grep "焼肉" "$SNAP"
-# If a suggestion matches, click it. Otherwise find and click the search button:
-grep "検索" "$SNAP"
-playwright-cli click e<SEARCH_BTN_REF>
-```
-
-## Step 5 — Sort order and filters (URL parameters)
-
-After the search results page loads, build the final URL by appending the required parameters and navigate directly — no UI interaction needed.
-
-**Sort order parameters (`SrtT`):**
-
-| User request | `SrtT` value |
+| User request | `--sort` value |
 |---|---|
 | 評分排序（default） | `rt` |
 | 評論數排序 | `rvcn` |
 
-**Filter parameters (optional):**
+The script returns a JSON array. Each entry contains:
+- `rank`, `name`, `score`, `reviews`, `url`
+- `detail.awards` — full award history (e.g. `"2024 Gold"`, `"2023 百名店"`)
+- `detail.intro` — restaurant PR text `{ title, body }` (null if none)
+- `detail.店舗情報` — info table: address, phone, hours, budget, etc.
+- `detail.口コミ` — top reviews `[{ title, text }]`
 
-| Filter | URL Parameter |
-|---|---|
-| Vegetarian menu available | `ChkVegetarianMenu=1` |
+---
 
-```bash
-# Get the current URL after Step 4, then append the needed parameters:
-CURRENT_URL=$(playwright-cli eval "window.location.href" | grep "^\"" | tr -d '"')
+## Critical Rules
 
-# Example: score ranking + vegetarian filter (sort_mode=1 is required for score ranking)
-playwright-cli goto "${CURRENT_URL}&SrtT=rt&sort_mode=1&ChkVegetarianMenu=1"
-
-# Example: review-count ranking only (sort_mode=1 not needed)
-playwright-cli goto "${CURRENT_URL}&SrtT=rvcn"
-```
-
-Verify by checking the page title — it should reflect the sort order and any active filters.
-
-## Step 6 — Extract restaurant list
-
-`playwright-cli run-code` expects a single expression (an arrow function), so you can't prepend `const` statements inline. Write to a temp file first, then run:
-
-```bash
-# Replace the default N=5 with the actual requested count:
-sed 's/const N = typeof TOP_N.*/const N = 5;/' \
-  .claude/skills/tabelog-search/scripts/extract_list.js > /tmp/tbl_list.js
-playwright-cli run-code "$(cat /tmp/tbl_list.js)"
-```
-
-If the result is `[]`, the page may not have fully loaded (DNS cache overflow error is a known cause). Run `playwright-cli reload` and retry.
-
-This returns a JSON array with: `rank`, `name`, `score`, `reviews`, `badge` (百名店 or null), `url`.
-
-Note: the `name` field may have the rank number prepended (e.g. `"1北新地やまがた屋"`). Strip the leading digit when displaying.
-
-## Step 7 — Fetch detail pages in parallel with subagents
-
-Since each restaurant page is independent, launch one subagent per restaurant simultaneously — this is 4–5x faster than sequential fetching.
-
-Each subagent must use its own named session (`-s=detail-<rank>`) so they don't interfere with the main browser or each other. Close the session after extraction.
-
-The detail script returns a JSON object with three fields:
-- `score`: the restaurant's overall rating score
-- `店舗情報`: flat key→value pairs from the **店舗基本情報** table (address, phone, hours, closed days, budget, etc.)
-- `口コミ`: array of `{ title, text }` from reviews shown on the page
-
-Before spawning subagents, resolve the script path:
-
-```bash
-DETAIL_SCRIPT=$(find ~/.claude -name "extract_detail.js" 2>/dev/null | head -1)
-echo "$DETAIL_SCRIPT"
-```
-
-For each restaurant, spawn an Agent with this prompt (replace `<RANK>`, `<URL>`, and `<DETAIL_SCRIPT>` with actual values):
-
-```
-Extract details from a Tabelog restaurant page using a dedicated browser session.
-
-1. Open a new session and navigate:
-   playwright-cli -s=detail-<RANK> open "<URL>"
-
-2. Run the bundled extraction script:
-   playwright-cli -s=detail-<RANK> run-code "$(cat <DETAIL_SCRIPT>)"
-
-3. Close the session: playwright-cli -s=detail-<RANK> close
-
-4. Return the raw JSON result.
-```
-
-Collect all results and merge with the list data from Step 6.
-
-## CSS Selectors Reference
-
-**List page (Step 6)**
-
-| Field | Selector |
-|-------|----------|
-| Restaurant card | `.list-rst__wrap` |
-| Name | `.list-rst__rst-name` |
-| Score | `.c-rating__val` |
-| Review count | `.list-rst__rvw-count` |
-| 百名店 badge | `.c-shop-top-badge` |
-| Detail page link | `a.list-rst__rst-name-target` |
-
-**Detail page (Step 7)**
-
-The `extract_detail.js` script returns `{ score, 店舗情報, 口コミ }`. For 店舗情報, `.rstinfo-table__item-title/.value` is attempted first; `.c-table tr` (with `th`/`td`) is used as fallback and is what works on most pages. 口コミ are extracted from `.rstdtl-top-rvwlst__list > li` as `{ title, text }` pairs.
-
-## Score Reference
-
-| Score | Quality |
-|-------|--------|
-| 3.8+ | 優秀 |
-| 3.5–3.8 | 良好 |
-| 3.5 以下 | 普通 |
-
-## Critical Rules — Do NOT Hallucinate
-
-> **🚫 Never fabricate restaurant URLs or recommend restaurants not found in search results.**
+> **🚫 Never fabricate restaurant URLs or recommend restaurants not in the search results.**
 >
-> All restaurant URLs presented to the user must come directly from the tabelog search result pages (Step 6) or detail pages (Step 7). Do NOT recall restaurant names or URLs from training data and present them as search results — tabelog URLs use opaque numeric IDs that cannot be reliably reconstructed from memory and may point to a completely different (or closed) business.
->
-> If search results don't include an obvious specialist restaurant (e.g. a dedicated しらすや for しらす丼), report what was actually found and say so clearly. Do not supplement with URLs guessed from memory.
+> All URLs must come directly from the script output. Tabelog URLs use opaque numeric IDs that cannot be reconstructed from memory and may point to a different or closed business. If results don't include an obvious match for the user's request, report what was actually found and say so clearly.
+
+---
 
 ## Output Format
 
-Present results in Traditional Chinese (繁體中文) with rank, name, score, review count, 百名店 badge, address, phone, reservation status, intro, and Tabelog URL for each restaurant.
+Present results in Traditional Chinese (繁體中文). For each restaurant include:
+rank, name, score, review count, awards, address, phone, reservation status, budget, hours, intro (if present), selected reviews, and Tabelog URL.
