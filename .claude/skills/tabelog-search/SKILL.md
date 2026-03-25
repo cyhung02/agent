@@ -31,7 +31,7 @@ grep "cursor=pointer" "$SNAP" | grep "日本語"
 playwright-cli click e<REF>
 ```
 
-**If clicking fails due to the overlay intercepting pointer events**, the `日本語` listitem itself may also be blocked by the overlay layer (`.c-overlay.js-lang-change-section-overlay`). In that case, hide it via JavaScript first, then proceed to Step 3 directly:
+After clicking, check if the language overlay is still present and remove it if so:
 
 ```bash
 playwright-cli run-code "async page => { await page.evaluate(() => { const overlay = document.querySelector('.c-overlay.js-lang-change-section-overlay'); if (overlay) overlay.style.display = 'none'; }); }"
