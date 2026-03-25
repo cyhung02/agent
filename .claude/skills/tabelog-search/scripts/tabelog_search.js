@@ -114,21 +114,26 @@ async function modeSearch() {
   await page.waitForTimeout(500);
 
   // Fill keyword
+  let alreadyOnResults = false;
   if (keyword) {
     const kwSuggestions = await getSuggestions(page, '#sk', keyword);
     const kwMatch = kwSuggestions.find(s => s === keyword);
     if (kwMatch) {
       await page.locator('li.js-header-search-suggest-items', { hasText: kwMatch }).first().click();
     } else {
-      // No exact match - just press Enter to search with raw keyword
+      // No exact match - press Enter; this navigates directly to results
       await page.keyboard.press('Enter');
+      await page.waitForURL('**/rstLst/**', { timeout: 30000 }).catch(() => {});
+      alreadyOnResults = page.url().includes('/rstLst/');
     }
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(300);
   }
 
-  // Click search button
-  await page.click('#js-global-search-btn');
-  await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
+  // Click search button only if not already on results page
+  if (!alreadyOnResults) {
+    await page.click('#js-global-search-btn');
+    await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
+  }
 
   // Apply sort order via URL
   const currentUrl = page.url();
