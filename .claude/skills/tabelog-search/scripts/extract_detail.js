@@ -1,5 +1,4 @@
-// Extract all rows from the 店舗基本情報 table on a Tabelog restaurant detail page,
-// plus 口コミ (reviews) shown on the main page.
+// Extract 店舗基本情報 table and 口コミ on a Tabelog restaurant detail page,
 // Usage: playwright-cli run-code "$(cat scripts/extract_detail.js)"
 // Must be run after navigating to the restaurant's detail page.
 //
