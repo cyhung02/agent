@@ -20,20 +20,28 @@ If you encounter connection issues or `playwright-cli` fails to launch, refer to
 playwright-cli open https://tabelog.com 2>&1 | tail -5
 ```
 
-## Step 2 — Dismiss language popup (conditional)
+## Step 2 — Set language to Japanese
 
-Tabelog only shows a language selection popup on first visit. If the cookie already stores the Japanese preference, the popup won't appear — skip this step.
+Try to select 日本語 from the language popup (it may not appear if the preference is already stored), then always remove the overlay.
 
 ```bash
 SNAP=$(ls -t ~/.playwright-cli/page-*.yml | head -1)
 grep "cursor=pointer" "$SNAP" | grep "日本語"
-# If a result appears, click that ref. If no result, skip this step.
+# If a result appears, click that ref. If no result, skip the click.
 playwright-cli click e<REF>
+```
+
+Remove the overlay (safe to run even if it doesn't exist):
+
+```bash
+playwright-cli run-code "async page => { await page.evaluate(() => { const overlay = document.querySelector('.c-overlay.js-lang-change-section-overlay'); if (overlay) overlay.style.display = 'none'; }); }"
 ```
 
 ## Step 3 — Fill area via autocomplete (important)
 
 Tabelog uses autocomplete to resolve area/station names into internal location IDs. Filling the field via JavaScript bypasses this and produces nationwide results or CAPTCHAs, so always use the UI flow below.
+
+> **🚫 NEVER guess or fabricate area codes or URLs.** Tabelog's internal area codes (e.g. `A1404`, `A140402`) are opaque and cannot be reliably inferred from geography or sub-area names. Always obtain the search URL by going through the autocomplete UI — the resulting URL will contain the correct codes. Constructing URLs manually from guessed codes will silently return wrong-area results with no error.
 
 ```bash
 SNAP=$(ls -t ~/.playwright-cli/page-*.yml | head -1)
@@ -135,7 +143,14 @@ Each subagent must use its own named session (`-s=detail-<rank>`) so they don't 
 
 The detail script reads all rows from the **店舗基本情報** table and returns them as a flat key→value object — you'll get whatever fields that page has (address, phone, hours, closed days, budget, etc.).
 
-For each restaurant, spawn an Agent with this prompt (replace `<RANK>` and `<URL>` with actual values):
+Before spawning subagents, resolve the script path:
+
+```bash
+DETAIL_SCRIPT=$(find ~/.claude -name "extract_detail.js" 2>/dev/null | head -1)
+echo "$DETAIL_SCRIPT"
+```
+
+For each restaurant, spawn an Agent with this prompt (replace `<RANK>`, `<URL>`, and `<DETAIL_SCRIPT>` with actual values):
 
 ```
 Extract details from a Tabelog restaurant page using a dedicated browser session.
@@ -144,7 +159,7 @@ Extract details from a Tabelog restaurant page using a dedicated browser session
    playwright-cli -s=detail-<RANK> open "<URL>"
 
 2. Run the bundled extraction script:
-   playwright-cli -s=detail-<RANK> run-code "$(cat /home/user/agent/.claude/skills/tabelog-search/scripts/extract_detail.js)"
+   playwright-cli -s=detail-<RANK> run-code "$(cat <DETAIL_SCRIPT>)"
 
 3. Close the session: playwright-cli -s=detail-<RANK> close
 
@@ -173,10 +188,18 @@ The `extract_detail.js` script reads the entire **店舗基本情報** table and
 ## Score Reference
 
 | Score | Quality |
-|-------|---------|
+|-------|--------|
 | 3.8+ | 優秀 |
 | 3.5–3.8 | 良好 |
 | 3.5 以下 | 普通 |
+
+## Critical Rules — Do NOT Hallucinate
+
+> **🚫 Never fabricate restaurant URLs or recommend restaurants not found in search results.**
+>
+> All restaurant URLs presented to the user must come directly from the tabelog search result pages (Step 6) or detail pages (Step 7). Do NOT recall restaurant names or URLs from training data and present them as search results — tabelog URLs use opaque numeric IDs that cannot be reliably reconstructed from memory and may point to a completely different (or closed) business.
+>
+> If search results don't include an obvious specialist restaurant (e.g. a dedicated しらすや for しらす丼), report what was actually found and say so clearly. Do not supplement with URLs guessed from memory.
 
 ## Output Format
 
