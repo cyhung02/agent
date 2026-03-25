@@ -194,7 +194,14 @@ async function modeSearch() {
 
         // 受賞歴（完全リスト）
         const awardsRaw = await detailPage.$$eval('.rstinfo-table-badge-award__tooltip', els => els.map(e => e.innerText.trim())).catch(() => []);
-        const awards = awardsRaw.length ? awardsRaw : null;
+        const formatAward = (s) => {
+          const award = s.match(/The Tabelog Award (\d{4}) (\w+)/);
+          if (award) return `${award[1]} ${award[2]}`;
+          const hyaku = s.match(/(\d{4})/);
+          if (hyaku) return `${hyaku[1]} 百名店`;
+          return s;
+        };
+        const awards = awardsRaw.length ? awardsRaw.map(formatAward) : null;
 
         // 店舗PR・口コミ
         const prTitle = await detailPage.$eval('.pr-comment-title', e => e.innerText.trim()).catch(() => null);
