@@ -15,11 +15,12 @@ const { URL } = require('url');
 const args = process.argv.slice(2);
 const get = (flag) => { const i = args.indexOf(flag); return i !== -1 ? args[i + 1] : null; };
 
-const mode    = get('--mode') || 'suggest';
-const area    = get('--area');
-const keyword = get('--keyword') || '';
-const n       = parseInt(get('--n') || '5', 10);
-const sort    = get('--sort') || 'rt';
+const mode       = get('--mode') || 'suggest';
+const area       = get('--area');
+const keyword    = get('--keyword') || '';
+const n          = parseInt(get('--n') || '5', 10);
+const sort       = get('--sort') || 'rt';
+const vegetarian = args.includes('--vegetarian');
 
 if (!area) { console.error('Error: --area is required'); process.exit(1); }
 
@@ -133,7 +134,8 @@ async function modeSearch() {
   const currentUrl = page.url();
   const separator = currentUrl.includes('?') ? '&' : '?';
   const sortParam = sort === 'rt' ? `SrtT=rt&sort_mode=1` : `SrtT=${sort}`;
-  await page.goto(`${currentUrl}${separator}${sortParam}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+  const vegParam  = vegetarian ? `&ChkVegetarianMenu=1` : '';
+  await page.goto(`${currentUrl}${separator}${sortParam}${vegParam}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
 
   // Helpers for cleaning extracted text
   const stripNoise = (text, patterns) => {
