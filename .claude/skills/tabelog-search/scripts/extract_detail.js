@@ -1,12 +1,15 @@
-// Extract all rows from the 店舗基本情報 table on a Tabelog restaurant detail page.
+// Extract all rows from the 店舗基本情報 table on a Tabelog restaurant detail page,
+// plus 口コミ (reviews) shown on the main page.
 // Usage: playwright-cli run-code "$(cat scripts/extract_detail.js)"
 // Must be run after navigating to the restaurant's detail page.
 //
-// Returns a flat object where keys are the th labels and values are the td text,
-// e.g. { "住所": "...", "お問い合わせ": "...", "営業時間": "...", "定休日": "..." }
+// Returns an object with:
+//   - 店舗情報: flat key→value from the info table
+//   - 口コミ: array of { title, text } from reviews shown on the page
 async page => {
-  const rows = Array.from(await page.$$('.rstinfo-table .rstinfo-table__item'));
+  // --- 店舗基本情報 ---
   const info = {};
+  const rows = Array.from(await page.$$('.rstinfo-table .rstinfo-table__item'));
   for (const row of rows) {
     const th = await row.$eval('.rstinfo-table__item-title', e => e.textContent.trim()).catch(() => null);
     const td = await row.$eval('.rstinfo-table__item-value', e => e.innerText.trim()).catch(() => null);
@@ -21,5 +24,19 @@ async page => {
       if (th && td) info[th] = td;
     }
   }
-  return JSON.stringify(info, null, 2);
+
+  // --- 口コミ ---
+  const reviews = [];
+  const score = await page.$eval('.rdheader-rating__score-val', e => e.innerText.trim()).catch(() => null);
+  const reviewItems = Array.from(await page.$$('.rstdtl-top-rvwlst__list > li'));
+  for (const item of reviewItems) {
+    const title = await item.$eval('h4', e => e.innerText.trim()).catch(() => null);
+    const text  = await item.$$eval('p', els => {
+      const p = els.find(e => e.innerText.trim().length > 20 && !/ピックアップ/.test(e.innerText));
+      return p ? p.innerText.trim() : null;
+    }).catch(() => null);
+    if (title || text) reviews.push({ title, text });
+  }
+
+  return JSON.stringify({ score, 店舗情報: info, 口コミ: reviews }, null, 2);
 }
