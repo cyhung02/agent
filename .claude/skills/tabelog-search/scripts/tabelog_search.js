@@ -126,7 +126,7 @@ async function modeSearch() {
   }
 
   // Click search button
-  await page.click('button[type="submit"], input[type="submit"]');
+  await page.click('#js-global-search-btn');
   await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
 
   // Apply sort order via URL
@@ -136,15 +136,17 @@ async function modeSearch() {
   await page.goto(`${currentUrl}${separator}${sortParam}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
 
   // Extract restaurant list
+  // extract_list.js is a Playwright Node.js function (uses page.$$, $eval etc.)
+  // — call it directly with page, not via page.evaluate()
   const listScript = require('fs').readFileSync(
     require('path').join(__dirname, 'extract_list.js'), 'utf8'
   );
-  // Inject N value
   const patchedScript = listScript.replace(
     /const N = typeof TOP_N.*/,
     `const N = ${n};`
   );
-  const listJson = await page.evaluate(eval(`(${patchedScript})`));
+  const listFn = eval(`(${patchedScript})`);
+  const listJson = await listFn(page);
   const restaurants = JSON.parse(listJson);
 
   // Extract details in parallel
@@ -159,7 +161,7 @@ async function modeSearch() {
       const detailPage = await context.newPage();
       try {
         await detailPage.goto(r.url, { waitUntil: 'domcontentloaded', timeout: 30000 });
-        const raw = await detailPage.evaluate(detailFn);
+        const raw = await detailFn(detailPage);
         return { ...r, detail: JSON.parse(raw) };
       } catch (e) {
         return { ...r, detail: { error: e.message } };
