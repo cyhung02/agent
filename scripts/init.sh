@@ -10,6 +10,6 @@ bash .claude/skills/playwright-cli/scripts/install-playwright-cli.sh
 echo "==> Installing Agent Configurations ..."
 mkdir -p $HOME/.claude
 cp -r .claude/skills $HOME/.claude/.
-cp CLAUDE.md $HOME/.
+cp CLAUDE.md $HOME/.claude/.
 
 echo "==> Init complete."
