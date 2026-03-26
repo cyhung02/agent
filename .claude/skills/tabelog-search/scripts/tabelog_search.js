@@ -108,8 +108,10 @@ async function modeSearch() {
 
   await openTabelog(page);
 
-  // Fill area - find and click the exact match in autocomplete
-  const areaSuggestions = await getSuggestions(page, '#sa', area);
+  // Fill area - type only the part before the first space to avoid autocomplete returning
+  // empty results when the area string contains spaces (tabelog bug), then select exact match
+  const areaQuery = area.split(/\s/)[0];
+  const areaSuggestions = await getSuggestions(page, '#sa', areaQuery);
   const areaMatch = areaSuggestions.find(s => s === area);
   if (!areaMatch) {
     await browser.close();

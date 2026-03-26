@@ -28,7 +28,7 @@ The script path is:
 node .claude/skills/tabelog-search/scripts/tabelog_search.js \
   --mode suggest \
   --area "大阪" \
-  --keyword "焼肉"   # omit if user didn't specify a cuisine/keyword
+  --keyword "焼肉"   # omit if user didn't specify a cuisine/keyword, or if the intent is vegetarian (use --vegetarian filter in Step 3 instead)
 ```
 
 Returns JSON:
@@ -52,6 +52,7 @@ Returns JSON:
 - If suggestions only contain **restaurant names**, skip the exact match and pass the user's raw keyword instead (Mode 2 will press Enter and search as free text).
 - If `keyword_suggestions` is empty, pass the user's raw keyword as free text.
 - If the user didn't specify a keyword, omit `--keyword` entirely.
+- If the user's intent is **vegetarian**, omit `--keyword` entirely — the `--vegetarian` filter in Step 3 handles this.
 
 ---
 
