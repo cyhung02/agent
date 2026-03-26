@@ -88,10 +88,3 @@ The script returns a JSON array. Each entry contains:
 > **🚫 Never fabricate restaurant URLs or recommend restaurants not in the search results.**
 >
 > All URLs must come directly from the script output. Tabelog URLs use opaque numeric IDs that cannot be reconstructed from memory and may point to a different or closed business. If results don't include an obvious match for the user's request, report what was actually found and say so clearly.
-
----
-
-## Output Format
-
-Present results in Traditional Chinese (繁體中文). For each restaurant include:
-rank, name, score, review count, awards, address, phone, reservation status, budget, hours, intro (if present), selected reviews, and Tabelog URL.
