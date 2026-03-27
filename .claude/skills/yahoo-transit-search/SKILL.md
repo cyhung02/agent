@@ -78,7 +78,9 @@ Returns JSON:
           "line": "ＪＲ埼京線",
           "direction": "新木場行",
           "platform": "[発] 1番線 → [着] 4番線",
-          "segmentFare": "199円"
+          "segmentFare": "199円",
+          "expressFare": "指定席：4,080円",  // optional: only when express surcharge applies
+          "expressFareTo": "大阪"             // optional: only when expressFare spans multiple stops
         },
         {
           "arrival": "17:00",
@@ -106,7 +108,9 @@ Returns JSON:
 - `platform`: `"[発] 1番線 → [着] 4番線"` (train only)
 - `ridingPosition`: car position hint e.g. `"乗車位置：[6両] 前"` (if provided)
 - `viaStops`: intermediate stops skipped e.g. `["明治神宮前"]` (if any)
-- `segmentFare`: fare for this segment e.g. `"199円"`
+- `segmentFare`: base 乗車券 fare starting from this stop e.g. `"3,410円"`. Covers from this stop up to (and including) the next stop that has a `segmentFare`, or the final destination if none follows.
+- `expressFare`: express supplement (指定席/自由席/グリーン) starting from this stop e.g. `"指定席：4,080円"`. Only present when an express surcharge applies.
+- `expressFareTo`: the last station covered by `expressFare` e.g. `"大阪"`. Present only when `expressFare` spans multiple stops (i.e. the express section closes at a later station than it opened).
 
 ---
 
