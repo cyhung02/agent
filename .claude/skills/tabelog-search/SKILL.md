@@ -39,20 +39,18 @@ Returns JSON:
 }
 ```
 
-`keyword_suggestions` may be empty for genre-level terms like "ラーメン" — this is normal. Tabelog only autocompletes specific restaurant names, not all genre categories.
-
 ---
 
 ## Step 2 — Choose Area and Keyword
 
 **Area (required):** Pick the entry that best matches the user's intent. Mode 2 requires an exact string from `area_suggestions` — do not modify it.
 
-**Keyword (optional):** Apply this logic:
-- If `keyword_suggestions` contains a **genre category** that matches the user's intent (e.g. `"焼肉・ホルモン"`, `"カフェ・喫茶店"`), use it as an exact match.
-- If suggestions only contain **restaurant names**, skip the exact match and pass the user's raw keyword instead (Mode 2 will press Enter and search as free text).
-- If `keyword_suggestions` is empty, pass the user's raw keyword as free text.
-- If the user didn't specify a keyword, omit `--keyword` entirely.
-- If the user's intent is **vegetarian**, omit `--keyword` entirely — the `--vegetarian` filter in Step 3 handles this.
+**Keyword (optional):** Apply this logic in order:
+1. If the user didn't specify a keyword, omit `--keyword` entirely.
+2. If the user's intent is **vegetarian**, omit `--keyword` entirely — the `--vegetarian` filter in Step 3 handles this.
+3. If the user specified a **cuisine/genre type**: look for a matching genre category in `keyword_suggestions` (e.g. `"焼肉・ホルモン"`, `"カフェ・喫茶店"`) and use it as an exact match.
+4. If the user specified a **restaurant name**: look for the same restaurant in `keyword_suggestions` (fuzzy match — use your judgement, no need for exact character match) and use it as an exact match.
+5. If no suitable match is found in either case (e.g. user gave a genre but only restaurant names appear, or user gave a restaurant name but no matching restaurant appears), pass the user's raw keyword as free text.
 
 ---
 
@@ -77,9 +75,8 @@ node .claude/skills/tabelog-search/scripts/tabelog_search.js \
 
 The script returns a JSON array. Each entry contains:
 - `rank`, `name`, `score`, `reviews`, `url`
-- `detail.awards` — full award history (e.g. `"2024 Gold"`, `"2023 百名店"`)
 - `detail.intro` — restaurant PR text `{ title, body }` (null if none)
-- `detail.店舗情報` — info table: address, phone, hours, budget, etc.
+- `detail.店舗情報` — info table: address, phone, hours, budget, etc. Awards are in `detail.店舗情報['受賞・選出歴']` as an array (e.g. `["2024 Gold", "2023 百名店"]`); omitted if none.
 - `detail.口コミ` — top reviews `[{ title, text }]`
 
 ---
