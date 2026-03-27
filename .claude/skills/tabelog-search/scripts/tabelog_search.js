@@ -207,12 +207,12 @@ async function modeSearch() {
         const prBody   = prBodyM  ? stripHtml(prBodyM[1])  : null;
         const intro    = prTitle || prBody ? { title: prTitle, body: prBody } : null;
 
-        // 口コミ — collect up to 3 review URLs + snippet titles from list page
+        // 口コミ — collect only the first review URL + snippet title from list page
         const rvwSection = html.match(/rstdtl-top-rvwlst__list([\s\S]*?)(?=<\/ul>)/);
         const rvwCandidates = [];
         if (rvwSection) {
           for (const liM of rvwSection[1].matchAll(/<li[\s\S]*?<\/li>/g)) {
-            if (rvwCandidates.length >= 3) break;
+            if (rvwCandidates.length >= 1) break;
             const li     = liM[0];
             const titleM = li.match(/<h4[^>]*>([\s\S]*?)<\/h4>/);
             const title  = titleM ? stripHtml(titleM[1]) : null;
