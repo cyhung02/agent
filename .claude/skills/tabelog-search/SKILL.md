@@ -39,8 +39,6 @@ Returns JSON:
 }
 ```
 
-`keyword_suggestions` may be empty for genre-level terms like "ラーメン" — this is normal. Tabelog only autocompletes specific restaurant names, not all genre categories.
-
 ---
 
 ## Step 2 — Choose Area and Keyword
@@ -77,9 +75,8 @@ node .claude/skills/tabelog-search/scripts/tabelog_search.js \
 
 The script returns a JSON array. Each entry contains:
 - `rank`, `name`, `score`, `reviews`, `url`
-- `detail.awards` — full award history (e.g. `"2024 Gold"`, `"2023 百名店"`)
 - `detail.intro` — restaurant PR text `{ title, body }` (null if none)
-- `detail.店舗情報` — info table: address, phone, hours, budget, etc.
+- `detail.店舗情報` — info table: address, phone, hours, budget, etc. Awards are in `detail.店舗情報['受賞・選出歴']` as an array (e.g. `["2024 Gold", "2023 百名店"]`); omitted if none.
 - `detail.口コミ` — top reviews `[{ title, text }]`
 
 ---
