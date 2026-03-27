@@ -76,12 +76,6 @@ Returns a list of route summaries, each with a compact `flow`:
       "flow": ["新宿", "ＪＲ埼京線", "渋谷"]
     }
   ],
-  "disambiguation": {            // present only when multiple stations matched
-    "from": [
-      { "code": "22741", "name": "新宿", "label": "新宿駅" },
-      ...
-    ]
-  }
 }
 ```
 
@@ -156,12 +150,6 @@ Returns the summary fields plus full `stops` array:
 - `segmentFare`: base 乗車券 fare starting from this stop e.g. `"3,410円"`. Covers from this stop up to (and including) the next stop that has a `segmentFare`, or the final destination if none follows.
 - `expressFare`: express supplement (指定席/自由席/グリーン) starting from this stop e.g. `"指定席：4,080円"`. Only present when an express surcharge applies.
 - `expressFareTo`: the last station covered by `expressFare` e.g. `"大阪"`. Present only when `expressFare` spans multiple stops.
-
----
-
-## Handling Disambiguation
-
-If the search output contains a `"disambiguation"` key despite following the suggest-first workflow, inform the user of the candidates and ask which to use. Then re-run with the chosen `--from-code` / `--to-code`.
 
 ---
 

@@ -324,32 +324,13 @@ function buildSearchUrl() {
   return `https://transit.yahoo.co.jp/search/result?${params}`;
 }
 
-// --- Fetch HTML and extract disambiguation if present ---
+// --- Fetch HTML ---
 function fetchHtml() {
   if (!from || !to) { console.error('Error: --from and --to are required'); process.exit(1); }
   const url = buildSearchUrl();
-  let html;
-  try { html = curlGet(url); } catch (e) {
+  try { return curlGet(url); } catch (e) {
     console.error('Error fetching search results:', e.message); process.exit(1);
   }
-
-  const disambig = {};
-  const researchM = html.match(/class="boxResearch"[\s\S]*?(<dl[\s\S]*?<\/dl>)/);
-  if (researchM) {
-    const section = researchM[1];
-    const fromM = section.match(/<dt>出発地[\s\S]*?<select>([\s\S]*?)<\/select>/);
-    if (fromM) {
-      disambig.from = [...fromM[1].matchAll(/<option value="([^"]*)"[^>]*data-name="([^"]*)"[^>]*>([^<]*)</g)]
-        .slice(0, 5).map(m => ({ code: m[1].replace(/^,,/, ''), name: m[2], label: m[3].trim() }));
-    }
-    const toM = section.match(/<dt>到着地[\s\S]*?<select>([\s\S]*?)<\/select>/);
-    if (toM) {
-      disambig.to = [...toM[1].matchAll(/<option value="([^"]*)"[^>]*data-name="([^"]*)"[^>]*>([^<]*)</g)]
-        .slice(0, 5).map(m => ({ code: m[1].replace(/^,,/, ''), name: m[2], label: m[3].trim() }));
-    }
-  }
-
-  return { html, disambig };
 }
 
 // --- Parse route summary fields from a route block ---
@@ -388,7 +369,7 @@ function parseRouteSummary(block, idx) {
 
 // --- Mode 2: search — returns route summaries with flow ---
 function modeSearch() {
-  const { html, disambig } = fetchHtml();
+  const html = fetchHtml();
   const routeBlocks = html.split(/<div id="route\d+">/);
   const routes = [];
 
@@ -403,14 +384,12 @@ function modeSearch() {
     routes.push(summary);
   }
 
-  const output = { routes };
-  if (Object.keys(disambig).length > 0) output.disambiguation = disambig;
-  console.log(JSON.stringify(output, null, 2));
+  console.log(JSON.stringify({ routes }, null, 2));
 }
 
 // --- Mode 3: detail — returns full stops for one route ---
 function modeDetail() {
-  const { html, disambig } = fetchHtml();
+  const html = fetchHtml();
   const routeBlocks = html.split(/<div id="route\d+">/);
 
   if (routeNum < 1 || routeNum >= routeBlocks.length) {
@@ -424,9 +403,7 @@ function modeDetail() {
   const detailM = block.match(/<div class="routeDetail">([\s\S]*?)<\/div><\/div><\/div>/);
   const stops = detailM ? parseRouteDetail(detailM[1]) : [];
 
-  const output = { ...summary, stops };
-  if (Object.keys(disambig).length > 0) output.disambiguation = disambig;
-  console.log(JSON.stringify(output, null, 2));
+  console.log(JSON.stringify({ ...summary, stops }, null, 2));
 }
 
 // --- Main ---
