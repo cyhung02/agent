@@ -45,12 +45,11 @@ Returns JSON:
 
 **Area (required):** Pick the entry that best matches the user's intent. Mode 2 requires an exact string from `area_suggestions` — do not modify it.
 
-**Keyword (optional):** Apply this logic:
-- If `keyword_suggestions` contains a **genre category** that matches the user's intent (e.g. `"焼肉・ホルモン"`, `"カフェ・喫茶店"`), use it as an exact match.
-- If suggestions only contain **restaurant names**, skip the exact match and pass the user's raw keyword instead (Mode 2 will press Enter and search as free text).
-- If `keyword_suggestions` is empty, pass the user's raw keyword as free text.
-- If the user didn't specify a keyword, omit `--keyword` entirely.
-- If the user's intent is **vegetarian**, omit `--keyword` entirely — the `--vegetarian` filter in Step 3 handles this.
+**Keyword (optional):** Apply this logic in order:
+1. If the user didn't specify a keyword, omit `--keyword` entirely.
+2. If the user's intent is **vegetarian**, omit `--keyword` entirely — the `--vegetarian` filter in Step 3 handles this.
+3. If `keyword_suggestions` contains a **genre category** that matches the user's intent (e.g. `"焼肉・ホルモン"`, `"カフェ・喫茶店"`), use it as an exact match.
+4. Otherwise (suggestions only contain restaurant names, or are empty), pass the user's raw keyword as free text.
 
 ---
 
