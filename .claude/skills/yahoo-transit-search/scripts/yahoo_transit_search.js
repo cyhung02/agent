@@ -114,9 +114,25 @@ function parseRouteDetail(detailHtml) {
   // Used to attribute the closing express fare back to that opening station when the
   // inner fareSection express spans multiple stationBlocks.
   let pendingExpressFareIdx = null;
+  // Index into stops[] of the stop that needs expressFareTo set to the NEXT station name.
+  // When an outer fareSection closes (base fare found in a later block), the express
+  // supplement covers through to the station AFTER that closing block — so we defer
+  // setting expressFareTo until the next iteration when we know that station name.
+  let pendingExpressFareToIdx = null;
 
   for (let i = 1; i < stationBlocks.length; i++) {
     const sb = stationBlocks[i];
+
+    // --- Station name (extracted early for deferred expressFareTo) ---
+    const stNameM = sb.match(/href="\/station\/(\d+)"[^>]*>([^<]+)<\/a>/);
+    const stNameEarly = stNameM ? stNameM[2].trim() : '';
+
+    // Deferred: set expressFareTo for an earlier stop to THIS station's name.
+    // This fires in the iteration AFTER the outer fareSection closed with a base fare.
+    if (pendingExpressFareToIdx !== null && stNameEarly) {
+      stops[pendingExpressFareToIdx].expressFareTo = stNameEarly;
+      pendingExpressFareToIdx = null;
+    }
 
     // When an outer fareSection (non-express) opens in this block, the current stop
     // (stops.length, before push) will own the base fare.
@@ -160,9 +176,8 @@ function parseRouteDetail(detailHtml) {
       departureTime = null;
     }
 
-    // --- Station name and ID ---
-    const stNameM = sb.match(/href="\/station\/(\d+)"[^>]*>([^<]+)<\/a>/);
-    const stName = stNameM ? stNameM[2].trim() : '';
+    // --- Station name and ID (stNameEarly already extracted above) ---
+    const stName = stNameEarly;
     const stId   = stNameM ? stNameM[1] : '';
 
     const stop = {
@@ -242,10 +257,11 @@ function parseRouteDetail(detailHtml) {
       } else {
         if (pendingBaseFareIdx !== null && pendingBaseFareIdx < stops.length) {
           stops[pendingBaseFareIdx].segmentFare = fareText;
-          // The outer fareSection closes at this block's station; if that opening stop
-          // also has an expressFare, record the closing station as expressFareTo.
+          // The outer fareSection closes in this block; the express supplement covers
+          // through to the NEXT station (not this one), so defer expressFareTo to the
+          // next iteration where we'll know that station's name.
           if (stops[pendingBaseFareIdx].expressFare) {
-            stops[pendingBaseFareIdx].expressFareTo = stop.station;
+            pendingExpressFareToIdx = pendingBaseFareIdx;
           }
         } else {
           stop.segmentFare = fareText;
