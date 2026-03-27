@@ -100,6 +100,10 @@ function parseRouteDetail(detailHtml) {
   // Used to attribute the closing base fare back to that station when the fareSection
   // spans multiple stationBlocks.
   let pendingBaseFareIdx = null;
+  // Index into stops[] of the station that opened the current inner fareSection express.
+  // Used to attribute the closing express fare back to that opening station when the
+  // inner fareSection express spans multiple stationBlocks.
+  let pendingExpressFareIdx = null;
 
   for (let i = 1; i < stationBlocks.length; i++) {
     const sb = stationBlocks[i];
@@ -108,6 +112,11 @@ function parseRouteDetail(detailHtml) {
     // (stops.length, before push) will own the base fare.
     if (/<div class="fareSection"(?! express)/.test(sb)) {
       pendingBaseFareIdx = stops.length;
+    }
+    // When an inner fareSection express opens in this block, the current stop
+    // (stops.length, before push) will own the express supplement fare.
+    if (/<div class="fareSection express"/.test(sb)) {
+      pendingExpressFareIdx = stops.length;
     }
 
     // --- Times ---
@@ -193,7 +202,9 @@ function parseRouteDetail(detailHtml) {
     // --- Fare classification ---
     // Collect all non-empty fare values from <p class="fare"><span>X</span></p> in this block.
     // Classify by content:
-    //   - Contains 指定席/自由席/グリーン → express supplement, always attributed to current stop
+    //   - Contains 指定席/自由席/グリーン → express supplement
+    //     If pendingExpressFareIdx points to an earlier stop, attribute to that stop (inner
+    //     fareSection express spanned multiple stationBlocks). Otherwise attribute to current stop.
     //   - Otherwise → base 乗車券
     //     If pendingBaseFareIdx points to an earlier stop, attribute to that stop (outer
     //     fareSection spanned multiple stationBlocks). Otherwise attribute to current stop.
@@ -203,7 +214,12 @@ function parseRouteDetail(detailHtml) {
 
     for (const fareText of allFares) {
       if (/指定席|自由席|グリーン/.test(fareText)) {
-        stop.expressFare = fareText;
+        if (pendingExpressFareIdx !== null && pendingExpressFareIdx < stops.length) {
+          stops[pendingExpressFareIdx].expressFare = fareText;
+        } else {
+          stop.expressFare = fareText;
+        }
+        pendingExpressFareIdx = null;
       } else {
         if (pendingBaseFareIdx !== null && pendingBaseFareIdx < stops.length) {
           stops[pendingBaseFareIdx].segmentFare = fareText;
