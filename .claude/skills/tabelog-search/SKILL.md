@@ -22,7 +22,7 @@ The script is scripts/tabelog_search.js
 ## Step 1 — Run Mode 1: Get Suggestions
 
 ```bash
-node .claude/skills/tabelog-search/scripts/tabelog_search.js \
+node scripts/tabelog_search.js \
   --mode suggest \
   --area "大阪" \
   --keyword "焼肉"   # omit if user didn't specify a cuisine/keyword, or if the intent is vegetarian (use --vegetarian filter in Step 3 instead)
@@ -54,7 +54,7 @@ Returns JSON:
 ## Step 3 — Run Mode 2: Full Search
 
 ```bash
-node .claude/skills/tabelog-search/scripts/tabelog_search.js \
+node scripts/tabelog_search.js \
   --mode search \
   --area "大阪市" \
   --keyword "焼肉・ホルモン" \   # omit if no keyword
