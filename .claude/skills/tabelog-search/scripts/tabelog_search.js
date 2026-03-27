@@ -190,17 +190,14 @@ async function modeSearch() {
           if (key && val && !SKIP_KEYS.has(key)) info[key] = val;
         }
 
-        // 受賞歴
-        const awardsRaw = [...html.matchAll(/rstinfo-table-badge-award__tooltip[^>]*>([\s\S]*?)<\/div>/g)]
-          .map(m => stripHtml(m[1])).filter(Boolean);
-        const formatAward = (s) => {
-          const a = s.match(/The Tabelog Award (\d{4}) (Gold|Silver|Bronze)/);
-          if (a) return `${a[1]} ${a[2]}`;
-          const h = s.match(/百名店 (\d{4})/);
-          if (h) return `${h[1]} 百名店`;
-          return s;
-        };
-        const awards = awardsRaw.length ? awardsRaw.map(formatAward) : null;
+        // 受賞歴 — parse from 受賞・選出歴 field (already extracted above)
+        const awardsText = info['受賞・選出歴'] || '';
+        const awardsSet = new Set();
+        for (const m of awardsText.matchAll(/The Tabelog Award (\d{4}) (Gold|Silver|Bronze)/g))
+          awardsSet.add(`${m[1]} ${m[2]}`);
+        for (const m of awardsText.matchAll(/百名店 (\d{4})/g))
+          awardsSet.add(`${m[1]} 百名店`);
+        const awards = awardsSet.size ? [...awardsSet] : null;
 
         // 店舗PR
         const prTitleM = html.match(/class="pr-comment-title"[^>]*>([\s\S]*?)<\/[a-z]+>/);
