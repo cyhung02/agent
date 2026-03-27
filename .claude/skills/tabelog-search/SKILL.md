@@ -15,10 +15,7 @@ Tabelog uses autocomplete to resolve area and keyword input into internal IDs. Y
 - **Mode 1 (suggest)**: Fetches autocomplete suggestions for area and keyword. You examine the results and decide which values to use.
 - **Mode 2 (search)**: Executes the full search with your chosen values and returns restaurant details.
 
-The script path is:
-```
-.claude/skills/tabelog-search/scripts/tabelog_search.js
-```
+The script is scripts/tabelog_search.js
 
 ---
 
