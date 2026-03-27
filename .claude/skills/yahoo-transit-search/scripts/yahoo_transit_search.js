@@ -257,6 +257,22 @@ function parseRouteDetail(detailHtml) {
     stops.push(stop);
   }
 
+  // Post-process: fill walkDuration for walk stops that don't have it (compute from time diff)
+  for (let i = 0; i < stops.length; i++) {
+    const stop = stops[i];
+    if (stop.segmentType === 'walk' && !stop.walkDuration) {
+      const next = stops[i + 1];
+      const depStr = stop.departure ? stop.departure.split(' ')[0] : null;
+      const arrStr = next && next.arrival ? next.arrival.split(' ')[0] : null;
+      if (depStr && arrStr && /^\d+:\d+$/.test(depStr) && /^\d+:\d+$/.test(arrStr)) {
+        const [dh, dm] = depStr.split(':').map(Number);
+        const [ah, am] = arrStr.split(':').map(Number);
+        const diff = (ah * 60 + am) - (dh * 60 + dm);
+        if (diff > 0) stop.walkDuration = `徒歩${diff}分`;
+      }
+    }
+  }
+
   return stops;
 }
 
@@ -269,22 +285,7 @@ function stopsToFlow(stops) {
     const stop = stops[i];
     if (stop.station) flow.push(stop.station);
     if (stop.segmentType === 'walk') {
-      if (stop.walkDuration) {
-        flow.push(stop.walkDuration);
-      } else {
-        // Compute walk duration from departure of this stop and arrival of next stop
-        const next = stops[i + 1];
-        const depStr = stop.departure ? stop.departure.split(' ')[0] : null;
-        const arrStr = next && next.arrival ? next.arrival.split(' ')[0] : null;
-        if (depStr && arrStr && /^\d+:\d+$/.test(depStr) && /^\d+:\d+$/.test(arrStr)) {
-          const [dh, dm] = depStr.split(':').map(Number);
-          const [ah, am] = arrStr.split(':').map(Number);
-          const diff = (ah * 60 + am) - (dh * 60 + dm);
-          flow.push(diff > 0 ? `徒歩${diff}分` : '徒歩');
-        } else {
-          flow.push('徒歩');
-        }
-      }
+      flow.push(stop.walkDuration || '徒歩');
     } else if (stop.segmentType === 'train' && stop.line) {
       flow.push(stop.line);
     }
