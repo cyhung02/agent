@@ -17,9 +17,9 @@ The script is `scripts/yahoo_transit_search.js`
 
 ---
 
-## Step 1 — Run Mode 1: Get Station Suggestions (if needed)
+## Step 1 — Run Mode 1: Get Suggestions (always)
 
-Only required when the user's station name is ambiguous or you want to confirm the exact station.
+Always run suggest first for both `--from` and `--to` inputs, regardless of whether the input is a station name, landmark, or address.
 
 ```bash
 node scripts/yahoo_transit_search.js \
@@ -36,7 +36,9 @@ Returns JSON array:
 ]
 ```
 
-Use `code` values in `--from-code` / `--to-code` to disambiguate.
+**Decision rules:**
+- **Non-empty results** → pick the best match. If it has a `code`, use `--from-code` / `--to-code` in the search to avoid disambiguation. If `code` is `""` (POI/landmark), use the `name` directly as `--from` / `--to`.
+- **Empty array `[]`** → suggest does not recognise the input (e.g. a full address). Skip to Step 2 and pass the original input directly as `--from` / `--to`.
 
 ---
 
@@ -116,15 +118,7 @@ Returns JSON:
 
 ## Handling Disambiguation
 
-If the output contains a `"disambiguation"` key, inform the user of the candidates and ask which station to use (or pick the most obvious match). Then re-run with `--from-code` / `--to-code`.
-
-**When to run Mode 1 first:**
-- The input is a **landmark or attraction name** (e.g. 東京スカイツリー, 大阪城, 浅草寺) — always run suggest first to find the nearest transit stop with a code, then use `--from-code` / `--to-code` in the search.
-- The station name is **highly ambiguous** and you need to confirm the exact station.
-
-For common unambiguous station names like "新宿", Mode 2 already returns disambiguation info in the response without a separate suggest call.
-
-> **Note:** Suggest results include both transit stops (with a numeric `code`) and landmarks/POI (with `code: ""`). Transit stops can be used with `--from-code` / `--to-code` for precise disambiguation. Landmarks with no code can be passed directly as `--from` / `--to` text — Yahoo Transit will geocode them automatically.
+If the search output contains a `"disambiguation"` key despite following the suggest-first workflow, inform the user of the candidates and ask which to use. Then re-run with the chosen `--from-code` / `--to-code`.
 
 ---
 
