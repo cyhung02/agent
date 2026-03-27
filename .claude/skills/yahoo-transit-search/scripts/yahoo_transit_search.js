@@ -61,16 +61,12 @@ function modeSuggest() {
   }
 
   const data = JSON.parse(raw);
-  // Filter to entries that have a transit code (exclude POI/address-only entries with empty code)
-  const results = (data.Result || [])
-    .filter(r => r.Code)
-    .slice(0, 10)
-    .map(r => ({
-      name:    r.Suggest,
-      yomi:    r.Yomi,
-      code:    r.Code,
-      address: r.Address,
-    }));
+  const results = (data.Result || []).slice(0, 10).map(r => ({
+    name:    r.Suggest,
+    yomi:    r.Yomi,
+    code:    r.Code,
+    address: r.Address,
+  }));
   console.log(JSON.stringify(results, null, 2));
 }
 

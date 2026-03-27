@@ -124,7 +124,7 @@ If the output contains a `"disambiguation"` key, inform the user of the candidat
 
 For common unambiguous station names like "新宿", Mode 2 already returns disambiguation info in the response without a separate suggest call.
 
-> **Note:** Suggest results only include entries with a valid transit code. POI/address-only entries (landmarks without a dedicated stop) are filtered out automatically.
+> **Note:** Suggest results include both transit stops (with a numeric `code`) and landmarks/POI (with `code: ""`). Transit stops can be used with `--from-code` / `--to-code` for precise disambiguation. Landmarks with no code can be passed directly as `--from` / `--to` text — Yahoo Transit will geocode them automatically.
 
 ---
 
