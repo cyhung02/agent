@@ -211,26 +211,39 @@ async function modeSearch() {
         const prBody   = prBodyM  ? stripHtml(prBodyM[1])  : null;
         const intro    = prTitle || prBody ? { title: prTitle, body: prBody } : null;
 
-        // 口コミ
+        // 口コミ — collect up to 3 review URLs + snippet titles from list page
         const rvwSection = html.match(/rstdtl-top-rvwlst__list([\s\S]*?)(?=<\/ul>)/);
-        const rvwItems = [];
+        const rvwCandidates = [];
         if (rvwSection) {
           for (const liM of rvwSection[1].matchAll(/<li[\s\S]*?<\/li>/g)) {
-            if (rvwItems.length >= 3) break;
+            if (rvwCandidates.length >= 3) break;
             const li     = liM[0];
             const titleM = li.match(/<h4[^>]*>([\s\S]*?)<\/h4>/);
             const title  = titleM ? stripHtml(titleM[1]) : null;
-            let text = null;
-            for (const pM of li.matchAll(/<p[^>]*>([\s\S]*?)<\/p>/g)) {
-              const t = stripHtml(pM[1]);
-              if (t.length > 20 && !/ピックアップ/.test(t)) {
-                text = t.replace(REVIEW_NOISE, '').trim();
-                break;
-              }
-            }
-            if (title || text) rvwItems.push({ title, text });
+            // Clean review URL: /pref/A.../dtlrvwlst/BXXXXXXXX/
+            const urlM   = li.match(/href="(\/[^"]+\/dtlrvwlst\/[^"/?]+)\//);
+            const rvwUrl = urlM ? `https://tabelog.com${urlM[1]}/` : null;
+            if (title || rvwUrl) rvwCandidates.push({ title, rvwUrl });
           }
         }
+        // Fetch full review text in parallel
+        const rvwItems = await Promise.all(rvwCandidates.map(async ({ title, rvwUrl }) => {
+          if (!rvwUrl) return { title, text: null };
+          try {
+            const rvwHtml = await curlGetAsync(rvwUrl);
+            const bodyM = rvwHtml.match(/rvw-item__rvw-comment[^>]*>[\s\S]*?<p>([\s\S]*?)<\/p>/);
+            if (bodyM) {
+              const text = bodyM[1]
+                .replace(/<br\s*\/?>/gi, '\n')
+                .replace(/<[^>]+>/g, '')
+                .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+                .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, ' ')
+                .trim();
+              return { title, text };
+            }
+          } catch (e) { /* fall through */ }
+          return { title, text: null };
+        }));
 
         return { ...r, detail: { awards, intro, 店舗情報: info, 口コミ: rvwItems } };
       } catch (e) {
