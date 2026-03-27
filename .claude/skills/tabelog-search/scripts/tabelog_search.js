@@ -230,7 +230,7 @@ async function modeSearch() {
             const bodyM = rvwHtml.match(/rvw-item__rvw-comment[^>]*>[\s\S]*?<p>([\s\S]*?)<\/p>/);
             if (bodyM) {
               const text = bodyM[1]
-                .replace(/<br\s*\/?>/gi, '\n')
+                .replace(/<br\s*\/?>/gi, '')
                 .replace(/<[^>]+>/g, '')
                 .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
                 .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, ' ')
