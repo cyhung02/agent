@@ -312,8 +312,15 @@ function stopsToFlow(stops) {
 // --- Build search URL from current args ---
 function buildSearchUrl() {
   const now = new Date();
-  let y = now.getFullYear(), mo = now.getMonth() + 1, d = now.getDate();
-  let hh = now.getHours(), mm = now.getMinutes();
+  // Use Asia/Tokyo timezone (JST = UTC+9) to match Yahoo Transit's locale.
+  // This ensures "now" reflects Japan local time even when the host is UTC.
+  const parts = new Intl.DateTimeFormat('ja-JP', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(now).reduce((acc, p) => { acc[p.type] = p.value; return acc; }, {});
+  let y = Number(parts.year), mo = Number(parts.month), d = Number(parts.day);
+  let hh = Number(parts.hour), mm = Number(parts.minute);
 
   if (dateStr) {
     const [dy, dm, dd] = dateStr.split('-').map(Number);
