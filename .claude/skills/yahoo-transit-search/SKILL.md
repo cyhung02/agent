@@ -8,10 +8,11 @@ allowed-tools: Bash
 
 Search transit routes using `scripts/yahoo_transit_search.js`. The script handles all HTTP requests internally — no browser needed.
 
-## Overview: Two-Mode Design
+## Overview: Three-Mode Design
 
-- **Mode 1 (suggest)**: Fetches station name candidates with station codes.
-- **Mode 2 (search)**: Searches routes and returns structured results.
+- **Mode 1 (suggest)**: Station/landmark autocomplete with codes.
+- **Mode 2 (search)**: Route list — summaries with compact flow overview.
+- **Mode 3 (detail)**: Full stop-by-stop detail for one specific route.
 
 The script is `scripts/yahoo_transit_search.js`
 
@@ -40,6 +41,8 @@ Returns JSON array:
 - **Non-empty results** → pick the best match. If it has a `code`, use `--from-code` / `--to-code` in the search to avoid disambiguation. If `code` is `""` (POI/landmark), use the `name` directly as `--from` / `--to`.
 - **Empty array `[]`** → suggest does not recognise the input (e.g. a full address). Skip to Step 2 and pass the original input directly as `--from` / `--to`.
 
+> Suggest results include both transit stops (with a numeric `code`) and landmarks/POI (with `code: ""`). Transit stops can be used with `--from-code` / `--to-code` for precise disambiguation. Landmarks with no code can be passed directly as `--from` / `--to` — Yahoo Transit will geocode them automatically.
+
 ---
 
 ## Step 2 — Run Mode 2: Search Routes
@@ -49,15 +52,15 @@ node scripts/yahoo_transit_search.js \
   --mode search \
   --from "新宿" \
   --to "渋谷" \
-  [--from-code 22741]     # optional: use station code to avoid disambiguation
-  [--to-code 22715]       # optional
-  [--date YYYY-MM-DD]     # default: today
-  [--time HH:MM]          # default: now
+  [--from-code 22741]          # optional: station code from suggest
+  [--to-code 22715]            # optional
+  [--date YYYY-MM-DD]          # default: today
+  [--time HH:MM]               # default: now
   [--type dep|arr|first|last]  # dep=出発(default), arr=到着, first=始発, last=終電
-  [--n 3]                 # number of routes to return (default: 3)
+  [--n 3]                      # number of routes to return (default: 3)
 ```
 
-Returns JSON:
+Returns a list of route summaries, each with a compact `flow`:
 ```json
 {
   "routes": [
@@ -70,27 +73,7 @@ Returns JSON:
       "transfers": "乗換： 0回",
       "fare": "IC優先： 199円",
       "distance": "3.4km",
-      "stops": [
-        {
-          "arrival": null,
-          "departure": "16:56",
-          "station": "新宿",
-          "stationId": "22741",
-          "segmentType": "train",
-          "line": "ＪＲ埼京線",
-          "direction": "新木場行",
-          "platform": "[発] 1番線 → [着] 4番線",
-          "segmentFare": "199円",
-          "expressFare": "指定席：4,080円",  // optional: only when express surcharge applies
-          "expressFareTo": "大阪"             // optional: only when expressFare spans multiple stops
-        },
-        {
-          "arrival": "17:00",
-          "departure": null,
-          "station": "渋谷",
-          "stationId": "22715"
-        }
-      ]
+      "flow": ["新宿", "ＪＲ埼京線", "渋谷"]
     }
   ],
   "disambiguation": {            // present only when multiple stations matched
@@ -102,6 +85,65 @@ Returns JSON:
 }
 ```
 
+**`flow` field:** Compact alternating array of station names and segment labels (walk duration or line name). Example for a multi-leg journey:
+```json
+["徒歩10分", "小岩", "ＪＲ総武線", "東京", "ＪＲ新幹線のぞみ", "新大阪", "阪神なんば線", "伝法"]
+```
+
+Present the route summaries to the user and ask which route they want details for.
+
+---
+
+## Step 3 — Run Mode 3: Route Detail
+
+After the user selects a route, fetch full stop-by-stop detail:
+
+```bash
+node scripts/yahoo_transit_search.js \
+  --mode detail \
+  --from "新宿" \
+  --to "渋谷" \
+  [--from-code 22741] \
+  [--to-code 22715] \
+  [--date YYYY-MM-DD] \
+  [--time HH:MM] \
+  [--type dep|arr|first|last] \
+  --route 1                    # required: route number from search results
+```
+
+Returns the summary fields plus full `stops` array:
+```json
+{
+  "route": "1",
+  "priority": ["早"],
+  "departure": "16:56",
+  "arrival": "17:00",
+  "duration": "4分",
+  "transfers": "乗換： 0回",
+  "fare": "IC優先： 199円",
+  "distance": "3.4km",
+  "stops": [
+    {
+      "arrival": null,
+      "departure": "16:56",
+      "station": "新宿",
+      "stationId": "22741",
+      "segmentType": "train",
+      "line": "ＪＲ埼京線",
+      "direction": "新木場行",
+      "platform": "[発] 1番線 → [着] 4番線",
+      "segmentFare": "199円"
+    },
+    {
+      "arrival": "17:00",
+      "departure": null,
+      "station": "渋谷",
+      "stationId": "22715"
+    }
+  ]
+}
+```
+
 **`stops` fields:**
 - `arrival` / `departure`: times at this stop (null if not applicable)
 - `segmentType`: `"train"` | `"walk"` | absent (last stop)
@@ -110,9 +152,10 @@ Returns JSON:
 - `platform`: `"[発] 1番線 → [着] 4番線"` (train only)
 - `ridingPosition`: car position hint e.g. `"乗車位置：[6両] 前"` (if provided)
 - `viaStops`: intermediate stops skipped e.g. `["明治神宮前"]` (if any)
+- `walkDuration`: walk time e.g. `"徒歩10分"` (walk only)
 - `segmentFare`: base 乗車券 fare starting from this stop e.g. `"3,410円"`. Covers from this stop up to (and including) the next stop that has a `segmentFare`, or the final destination if none follows.
 - `expressFare`: express supplement (指定席/自由席/グリーン) starting from this stop e.g. `"指定席：4,080円"`. Only present when an express surcharge applies.
-- `expressFareTo`: the last station covered by `expressFare` e.g. `"大阪"`. Present only when `expressFare` spans multiple stops (i.e. the express section closes at a later station than it opened).
+- `expressFareTo`: the last station covered by `expressFare` e.g. `"大阪"`. Present only when `expressFare` spans multiple stops.
 
 ---
 

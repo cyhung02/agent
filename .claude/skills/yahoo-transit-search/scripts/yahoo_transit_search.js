@@ -5,13 +5,21 @@
 //   Mode 1 - Get station suggestions:
 //     node yahoo_transit_search.js --mode suggest --station "新宿"
 //
-//   Mode 2 - Search routes:
+//   Mode 2 - Search routes (summary + flow):
 //     node yahoo_transit_search.js --mode search \
 //       --from "新宿" --to "渋谷" \
 //       [--from-code 22741] [--to-code 22715] \
 //       [--date YYYY-MM-DD] [--time HH:MM] \
 //       [--type dep|arr|first|last] \
 //       [--n 3]
+//
+//   Mode 3 - Route detail (full stops for one route):
+//     node yahoo_transit_search.js --mode detail \
+//       --from "新宿" --to "渋谷" \
+//       [--from-code 22741] [--to-code 22715] \
+//       [--date YYYY-MM-DD] [--time HH:MM] \
+//       [--type dep|arr|first|last] \
+//       --route 1
 
 const { execFileSync } = require('child_process');
 
@@ -29,6 +37,7 @@ const dateStr   = get('--date') || '';
 const timeStr   = get('--time') || '';
 const typeArg   = get('--type') || 'dep';
 const n         = parseInt(get('--n') || '3', 10);
+const routeNum  = parseInt(get('--route') || '1', 10);
 
 // --- curl helper ---
 const CURL_HEADERS = [
@@ -88,11 +97,12 @@ function modeSuggest() {
 //
 // Key: when an outer fareSection spans multiple station splits, the base fare lands in a
 // later stationBlock and must be attributed back to the station that OPENED the fareSection.
-// Express supplement fares (指定席 etc.) are always correctly in the opening station's block.
 //
 // Fields produced:
 //   segmentFare  — base 乗車券 for this segment (e.g. "820円", "3,410円")
 //   expressFare  — express supplement only when present (e.g. "指定席：4,080円")
+//   expressFareTo — last station covered by expressFare (when it spans multiple stops)
+//   walkDuration — walk time for walk segments (e.g. "徒歩10分")
 function parseRouteDetail(detailHtml) {
   const stationBlocks = detailHtml.split('<div class="station">');
   const stops = [];
@@ -170,6 +180,12 @@ function parseRouteDetail(detailHtml) {
       const isWalk = /icnWalk/.test(t);
       if (isWalk) {
         stop.segmentType = 'walk';
+        // Walk duration: text immediately after icnWalk></span>, before next tag
+        const walkDurM = t.match(/icnWalk"><\/span>([^<]+)/);
+        if (walkDurM) {
+          const dur = walkDurM[1].trim();
+          if (dur) stop.walkDuration = dur;
+        }
       } else {
         stop.segmentType = 'train';
         // Line name (text after icons, before <span class="destination">)
@@ -243,11 +259,24 @@ function parseRouteDetail(detailHtml) {
   return stops;
 }
 
-// --- Mode 2: search ---
-function modeSearch() {
-  if (!from || !to) { console.error('Error: --from and --to are required'); process.exit(1); }
+// --- Convert stops array to compact flow array for search summaries ---
+// Flow alternates: station → (walkDuration | line) → station → ...
+// Example: ["宇田川歯科医院", "徒歩10分", "小岩", "JR総武線", "錦糸町", ..., "伝法"]
+function stopsToFlow(stops) {
+  const flow = [];
+  for (const stop of stops) {
+    if (stop.station) flow.push(stop.station);
+    if (stop.segmentType === 'walk') {
+      flow.push(stop.walkDuration || '徒歩');
+    } else if (stop.segmentType === 'train' && stop.line) {
+      flow.push(stop.line);
+    }
+  }
+  return flow.filter(Boolean);
+}
 
-  // Resolve date/time
+// --- Build search URL from current args ---
+function buildSearchUrl() {
   const now = new Date();
   let y = now.getFullYear(), mo = now.getMonth() + 1, d = now.getDate();
   let hh = now.getHours(), mm = now.getMinutes();
@@ -261,11 +290,9 @@ function modeSearch() {
     hh = th; mm = tm;
   }
 
-  // type mapping: dep=1, arr=4, first=8, last=16
   const typeMap = { dep: 1, arr: 4, first: 8, last: 16 };
   const typeNum = typeMap[typeArg] || 1;
 
-  // flatlon/tlatlon format: ",,stationCode" (or empty string)
   const flatlon = fromCode ? `,,${fromCode}` : '';
   const tlatlon = toCode   ? `,,${toCode}`   : '';
 
@@ -294,13 +321,18 @@ function modeSearch() {
     sr: '1',
   });
 
-  const url = `https://transit.yahoo.co.jp/search/result?${params}`;
+  return `https://transit.yahoo.co.jp/search/result?${params}`;
+}
+
+// --- Fetch HTML and extract disambiguation if present ---
+function fetchHtml() {
+  if (!from || !to) { console.error('Error: --from and --to are required'); process.exit(1); }
+  const url = buildSearchUrl();
   let html;
   try { html = curlGet(url); } catch (e) {
     console.error('Error fetching search results:', e.message); process.exit(1);
   }
 
-  // Check for disambiguation (ほかに候補があります)
   const disambig = {};
   const researchM = html.match(/class="boxResearch"[\s\S]*?(<dl[\s\S]*?<\/dl>)/);
   if (researchM) {
@@ -317,64 +349,82 @@ function modeSearch() {
     }
   }
 
-  // Split HTML into per-route blocks on <div id="route01">, <div id="route02">, ...
+  return { html, disambig };
+}
+
+// --- Parse route summary fields from a route block ---
+function parseRouteSummary(block, idx) {
+  const numM = block.match(/<h2 class="title">ルート([\s\S]*?)<\/h2>/);
+  const num = numM ? stripHtml(numM[1]) : String(idx);
+
+  const priorities = [...block.matchAll(/class="icnPri[^"]*">([^<]+)</g)].map(m => m[1]);
+
+  let depTime = '', arrTime = '', duration = '', transfers = '', fare = '', distance = '';
+  const summaryM = block.match(/class="summary">([\s\S]*?)<\/ul>/);
+  if (summaryM) {
+    const s = summaryM[1];
+    const timeM = s.match(/class="time">([\s\S]*?)<\/li>/);
+    if (timeM) {
+      const t = stripHtml(timeM[1]);
+      const dtm = t.match(/(\d+:\d+)\s*発.*?(\d+:\d+)\s*着.*?(\d+分)/);
+      if (dtm) { depTime = dtm[1]; arrTime = dtm[2]; duration = dtm[3]; }
+      else {
+        const times = t.match(/(\d+:\d+)/g);
+        if (times && times.length >= 2) { depTime = times[0]; arrTime = times[1]; }
+        const durM = t.match(/(\d+分)/);
+        if (durM) duration = durM[1];
+      }
+    }
+    const transM = s.match(/class="transfer">([\s\S]*?)<\/li>/);
+    if (transM) transfers = stripHtml(transM[1]);
+    const fareM = s.match(/class="fare">([\s\S]*?)<\/li>/);
+    if (fareM) fare = stripHtml(fareM[1]);
+    const distM = s.match(/class="distance">([\s\S]*?)<\/li>/);
+    if (distM) distance = stripHtml(distM[1]);
+  }
+
+  return { route: num, priority: priorities, departure: depTime, arrival: arrTime, duration, transfers, fare, distance };
+}
+
+// --- Mode 2: search — returns route summaries with flow ---
+function modeSearch() {
+  const { html, disambig } = fetchHtml();
   const routeBlocks = html.split(/<div id="route\d+">/);
   const routes = [];
 
   for (let i = 1; i <= Math.min(n, routeBlocks.length - 1); i++) {
     const block = routeBlocks[i];
+    const summary = parseRouteSummary(block, i);
 
-    // Route number
-    const numM = block.match(/<h2 class="title">ルート([\s\S]*?)<\/h2>/);
-    const routeNum = numM ? stripHtml(numM[1]) : String(i);
-
-    // Priority tags (早/楽/安 etc.)
-    const priorities = [...block.matchAll(/class="icnPri[^"]*">([^<]+)</g)].map(m => m[1]);
-
-    // Summary
-    const summaryM = block.match(/class="summary">([\s\S]*?)<\/ul>/);
-    let depTime = '', arrTime = '', duration = '', transfers = '', fare = '', distance = '';
-    if (summaryM) {
-      const s = summaryM[1];
-      const timeM = s.match(/class="time">([\s\S]*?)<\/li>/);
-      if (timeM) {
-        const t = stripHtml(timeM[1]);
-        const dtm = t.match(/(\d+:\d+)\s*発.*?(\d+:\d+)\s*着.*?(\d+分)/);
-        if (dtm) { depTime = dtm[1]; arrTime = dtm[2]; duration = dtm[3]; }
-        else {
-          // Try alternative format
-          const times = t.match(/(\d+:\d+)/g);
-          if (times && times.length >= 2) { depTime = times[0]; arrTime = times[1]; }
-          const durM = t.match(/(\d+分)/);
-          if (durM) duration = durM[1];
-        }
-      }
-      const transM = s.match(/class="transfer">([\s\S]*?)<\/li>/);
-      if (transM) transfers = stripHtml(transM[1]);
-      const fareM = s.match(/class="fare">([\s\S]*?)<\/li>/);
-      if (fareM) fare = stripHtml(fareM[1]);
-      const distM = s.match(/class="distance">([\s\S]*?)<\/li>/);
-      if (distM) distance = stripHtml(distM[1]);
-    }
-
-    // Route detail
     const detailM = block.match(/<div class="routeDetail">([\s\S]*?)<\/div><\/div><\/div>/);
     const stops = detailM ? parseRouteDetail(detailM[1]) : [];
+    summary.flow = stopsToFlow(stops);
 
-    routes.push({
-      route: routeNum,
-      priority: priorities,
-      departure: depTime,
-      arrival: arrTime,
-      duration,
-      transfers,
-      fare,
-      distance,
-      stops,
-    });
+    routes.push(summary);
   }
 
   const output = { routes };
+  if (Object.keys(disambig).length > 0) output.disambiguation = disambig;
+  console.log(JSON.stringify(output, null, 2));
+}
+
+// --- Mode 3: detail — returns full stops for one route ---
+function modeDetail() {
+  const { html, disambig } = fetchHtml();
+  const routeBlocks = html.split(/<div id="route\d+">/);
+
+  if (routeNum < 1 || routeNum >= routeBlocks.length) {
+    console.error(`Error: route ${routeNum} not found (available: 1–${routeBlocks.length - 1})`);
+    process.exit(1);
+  }
+
+  const block = routeBlocks[routeNum];
+  const summary = parseRouteSummary(block, routeNum);
+
+  const detailM = block.match(/<div class="routeDetail">([\s\S]*?)<\/div><\/div><\/div>/);
+  const stops = detailM ? parseRouteDetail(detailM[1]) : [];
+
+  const output = { ...summary, stops };
   if (Object.keys(disambig).length > 0) output.disambiguation = disambig;
   console.log(JSON.stringify(output, null, 2));
 }
@@ -384,7 +434,9 @@ if (mode === 'suggest') {
   modeSuggest();
 } else if (mode === 'search') {
   modeSearch();
+} else if (mode === 'detail') {
+  modeDetail();
 } else {
-  console.error(`Unknown mode: ${mode}. Use --mode suggest or --mode search`);
+  console.error(`Unknown mode: ${mode}. Use --mode suggest, --mode search, or --mode detail`);
   process.exit(1);
 }
