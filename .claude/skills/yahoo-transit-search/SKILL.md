@@ -1,6 +1,6 @@
 ---
 name: yahoo-transit-search
-description: Search train/bus routes on Yahoo Transit (transit.yahoo.co.jp). Use this skill whenever the user wants to find transit routes in Japan — searching by departure/arrival station, date/time, or direction type. Covers tasks like "新宿から渋谷まで行きたい", "東京から大阪 新幹線", "明日の朝9時に渋谷着くには", "終電を調べて", "乗換案内". Also handles station disambiguation and specifying arrival time vs departure time.
+description: Search train/bus routes on Yahoo Transit (transit.yahoo.co.jp). Use this skill whenever the user wants to find transit routes in Japan — searching by departure/arrival station, date/time, or direction type. Covers tasks like "新宿から渋谷まで行きたい", "東京から大阪 新幹線", "明日の朝9時に渋谷着くには", "終電を調べて", "乗換案内", "京都駅から金閣寺までバスで行きたい", "バスの乗り換え調べて". Also handles station disambiguation, bus stops, landmarks as destinations, and specifying arrival time vs departure time.
 allowed-tools: Bash
 ---
 
@@ -60,9 +60,10 @@ node scripts/yahoo_transit_search.js \
   [--n 3]                      # number of routes to return (default: 3)
 ```
 
-Returns a list of route summaries, each with a compact `flow`:
+Returns a `uniqueId` plus a list of route summaries, each with a compact `flow`:
 ```json
 {
+  "uniqueId": "a3f9c2",
   "routes": [
     {
       "route": "1",
@@ -75,34 +76,30 @@ Returns a list of route summaries, each with a compact `flow`:
       "distance": "3.4km",
       "flow": ["新宿", "ＪＲ埼京線", "渋谷"]
     }
-  ],
+  ]
 }
 ```
+
+The full route data (with all stops) is automatically saved to `/tmp/yahoo_transit_{uniqueId}.json`.
 
 **`flow` field:** Compact alternating array of station names and segment labels (walk duration or line name). Example for a multi-leg journey:
 ```json
 ["徒歩10分", "小岩", "ＪＲ総武線", "東京", "ＪＲ新幹線のぞみ", "新大阪", "阪神なんば線", "伝法"]
 ```
 
-Present the route summaries to the user and ask which route they want details for.
+Present the route summaries to the user and ask which route they want details for. **Always retain the `uniqueId` from the search result — it is required for the detail step.**
 
 ---
 
 ## Step 3 — Run Mode 3: Route Detail
 
-After the user selects a route, fetch full stop-by-stop detail:
+After the user selects a route, read the full stop-by-stop detail from the cached file. **No HTTP request is made.**
 
 ```bash
 node scripts/yahoo_transit_search.js \
   --mode detail \
-  --from "新宿" \
-  --to "渋谷" \
-  [--from-code 22741] \
-  [--to-code 22715] \
-  [--date YYYY-MM-DD] \
-  [--time HH:MM] \
-  [--type dep|arr|first|last] \
-  --route 1                    # required: route number from search results
+  --id a3f9c2 \               # required: uniqueId from search result
+  --route 1                   # required: route number from search results
 ```
 
 Returns the summary fields plus full `stops` array:
