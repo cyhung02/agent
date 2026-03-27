@@ -190,14 +190,15 @@ async function modeSearch() {
           if (key && val && !SKIP_KEYS.has(key)) info[key] = val;
         }
 
-        // 受賞歴 — parse from 受賞・選出歴 field (already extracted above)
+        // Compact 受賞・選出歴 into deduplicated award tokens
         const awardsText = info['受賞・選出歴'] || '';
         const awardsSet = new Set();
         for (const m of awardsText.matchAll(/The Tabelog Award (\d{4}) (Gold|Silver|Bronze)/g))
           awardsSet.add(`${m[1]} ${m[2]}`);
         for (const m of awardsText.matchAll(/百名店 (\d{4})/g))
           awardsSet.add(`${m[1]} 百名店`);
-        const awards = awardsSet.size ? [...awardsSet] : null;
+        if (awardsSet.size) info['受賞・選出歴'] = [...awardsSet];
+        else delete info['受賞・選出歴'];
 
         // 店舗PR
         const prTitleM = html.match(/class="pr-comment-title"[^>]*>([\s\S]*?)<\/[a-z]+>/);
@@ -240,7 +241,7 @@ async function modeSearch() {
           return { title, text: null };
         }));
 
-        return { ...r, detail: { awards, intro, 店舗情報: info, 口コミ: rvwItems } };
+        return { ...r, detail: { intro, 店舗情報: info, 口コミ: rvwItems } };
       } catch (e) {
         return { ...r, detail: { error: e.message } };
       }
