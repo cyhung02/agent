@@ -161,15 +161,13 @@ async function modeSearch() {
     const nameM   = card.match(/list-rst__rst-name-target[^>]+href="([^"]+)"[^>]*>([^<]+)</);
     const scoreM  = card.match(/c-rating__val[^>]*>([\d.]+)</);
     const reviewM = card.match(/list-rst__rvw-count-num[^>]*>(\d+)</);
-    const badgeM  = card.match(/c-badge-hyakumeiten[^<]+<i>([^<]+)</);
     if (!nameM) continue;
     restaurants.push({
       rank: i,
       name: nameM[2].trim(),
       url: nameM[1],
-      score: scoreM  ? scoreM[1]           : null,
+      score: scoreM   ? scoreM[1]          : null,
       reviews: reviewM ? reviewM[1] + '件' : null,
-      badge: badgeM  ? badgeM[1]           : null,
     });
   }
 
