@@ -71,28 +71,44 @@ function modeSuggest() {
 }
 
 // --- Parse a routeDetail HTML block → array of stops with segment info ---
-// Structure:
-//   <div class="routeDetail">
-//     <div class="station">...</div>          ← stop
-//     <div class="access walk">...</div>      ← walk segment (optional)
-//     <div class="station">...</div>          ← stop (transfer)
-//     <div class="fareSection">
-//       <div class="access">...</div>         ← rail segment
-//       <div class="station">...</div>        ← stop (transfer, INSIDE fareSection)
-//       <div class="access">...</div>         ← rail segment
-//       <p class="fare">...</p>
+//
+// Fare structure on Yahoo Transit:
+//   <div class="fareSection">               ← outer: holds base 乗車券 fare at its closing </div>
+//     <div class="fareSection express">     ← inner: holds express supplement (指定席 etc.)
+//       <div class="access">...</div>
+//       <p class="fare">指定席：4,080円</p>
 //     </div>
-//     <div class="station">...</div>          ← stop (arrival)
+//     <div class="station">...</div>        ← transfer station INSIDE fareSection
+//     <div class="fareSection express">     ← another inner express segment
+//       <div class="access">...</div>
+//       <p class="fare"></p>               ← may be empty
+//     </div>
+//     <p class="fare">3,410円</p>          ← outer base 乗車券 (covers entire fareSection span)
 //   </div>
 //
-// Strategy: split the routeDetail on <div class="station"> to get inter-station segments,
-// then parse each station and the segment info that follows it.
+// Key: when an outer fareSection spans multiple station splits, the base fare lands in a
+// later stationBlock and must be attributed back to the station that OPENED the fareSection.
+// Express supplement fares (指定席 etc.) are always correctly in the opening station's block.
+//
+// Fields produced:
+//   segmentFare  — base 乗車券 for this segment (e.g. "820円", "3,410円")
+//   expressFare  — express supplement only when present (e.g. "指定席：4,080円")
 function parseRouteDetail(detailHtml) {
   const stationBlocks = detailHtml.split('<div class="station">');
   const stops = [];
+  // Index into stops[] of the station that opened the current outer fareSection.
+  // Used to attribute the closing base fare back to that station when the fareSection
+  // spans multiple stationBlocks.
+  let pendingBaseFareIdx = null;
 
   for (let i = 1; i < stationBlocks.length; i++) {
     const sb = stationBlocks[i];
+
+    // When an outer fareSection (non-express) opens in this block, the current stop
+    // (stops.length, before push) will own the base fare.
+    if (/<div class="fareSection"(?! express)/.test(sb)) {
+      pendingBaseFareIdx = stops.length;
+    }
 
     // --- Times ---
     // First station: <li>16:56</li>
@@ -174,9 +190,29 @@ function parseRouteDetail(detailHtml) {
       }
     }
 
-    // Fare for this segment
-    const fareM = sb.match(/<p class="fare"><span>([\s\S]*?)<\/span>/);
-    if (fareM) stop.segmentFare = stripHtml(fareM[1]);
+    // --- Fare classification ---
+    // Collect all non-empty fare values from <p class="fare"><span>X</span></p> in this block.
+    // Classify by content:
+    //   - Contains 指定席/自由席/グリーン → express supplement, always attributed to current stop
+    //   - Otherwise → base 乗車券
+    //     If pendingBaseFareIdx points to an earlier stop, attribute to that stop (outer
+    //     fareSection spanned multiple stationBlocks). Otherwise attribute to current stop.
+    const allFares = [...sb.matchAll(/<p class="fare"><span>([\s\S]*?)<\/span>/g)]
+      .map(m => stripHtml(m[1]))
+      .filter(f => f);
+
+    for (const fareText of allFares) {
+      if (/指定席|自由席|グリーン/.test(fareText)) {
+        stop.expressFare = fareText;
+      } else {
+        if (pendingBaseFareIdx !== null && pendingBaseFareIdx < stops.length) {
+          stops[pendingBaseFareIdx].segmentFare = fareText;
+        } else {
+          stop.segmentFare = fareText;
+        }
+        pendingBaseFareIdx = null;
+      }
+    }
 
     stops.push(stop);
   }
