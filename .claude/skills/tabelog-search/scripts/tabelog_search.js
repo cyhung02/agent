@@ -121,14 +121,18 @@ async function modeSearch() {
   }
 
   // Step 2: Resolve keyword name → datatype + id_in_datatype (optional)
+  // Only genre categories (Genre1/2/3) are sent as key_id.
+  // Restaurant names (AreaRestaurant/Restaurant) are sent as free-text only —
+  // their key_id is location-specific and won't match searches in other areas.
   let keyItem = null;
   if (keyword) {
     const kwParams = new URLSearchParams({ sk: keyword });
     kwParams.set('area_datatype', areaItem.datatype);
     kwParams.set('area_id', String(areaItem.id_in_datatype));
     const kwData = apiGet(`${BASE}?${kwParams}`);
-    keyItem = kwData.find(item => item.name === keyword) || null;
-    // if no exact match, keyword is sent as free-text (sk only, no key_id)
+    const match = kwData.find(item => item.name === keyword) || null;
+    const GENRE_TYPES = new Set(['Genre1', 'Genre2', 'Genre3']);
+    keyItem = match && GENRE_TYPES.has(match.datatype) ? match : null;
   }
 
   // Step 3: Get search results URL via rstsearch 302 redirect
