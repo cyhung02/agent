@@ -181,10 +181,11 @@ function parseRouteDetail(detailHtml) {
       if (isWalk) {
         stop.segmentType = 'walk';
         // Walk duration: text immediately after icnWalk></span>, before next tag
+        // Only set if it contains an actual time (e.g. "徒歩10分"), not bare "徒歩"
         const walkDurM = t.match(/icnWalk"><\/span>([^<]+)/);
         if (walkDurM) {
           const dur = walkDurM[1].trim();
-          if (dur) stop.walkDuration = dur;
+          if (/\d+分/.test(dur)) stop.walkDuration = dur;
         }
       } else {
         stop.segmentType = 'train';
@@ -264,10 +265,26 @@ function parseRouteDetail(detailHtml) {
 // Example: ["宇田川歯科医院", "徒歩10分", "小岩", "JR総武線", "錦糸町", ..., "伝法"]
 function stopsToFlow(stops) {
   const flow = [];
-  for (const stop of stops) {
+  for (let i = 0; i < stops.length; i++) {
+    const stop = stops[i];
     if (stop.station) flow.push(stop.station);
     if (stop.segmentType === 'walk') {
-      flow.push(stop.walkDuration || '徒歩');
+      if (stop.walkDuration) {
+        flow.push(stop.walkDuration);
+      } else {
+        // Compute walk duration from departure of this stop and arrival of next stop
+        const next = stops[i + 1];
+        const depStr = stop.departure ? stop.departure.split(' ')[0] : null;
+        const arrStr = next && next.arrival ? next.arrival.split(' ')[0] : null;
+        if (depStr && arrStr && /^\d+:\d+$/.test(depStr) && /^\d+:\d+$/.test(arrStr)) {
+          const [dh, dm] = depStr.split(':').map(Number);
+          const [ah, am] = arrStr.split(':').map(Number);
+          const diff = (ah * 60 + am) - (dh * 60 + dm);
+          flow.push(diff > 0 ? `徒歩${diff}分` : '徒歩');
+        } else {
+          flow.push('徒歩');
+        }
+      }
     } else if (stop.segmentType === 'train' && stop.line) {
       flow.push(stop.line);
     }
@@ -347,7 +364,7 @@ function parseRouteSummary(block, idx) {
     const timeM = s.match(/class="time">([\s\S]*?)<\/li>/);
     if (timeM) {
       const t = stripHtml(timeM[1]);
-      const dtm = t.match(/(\d+:\d+)\s*発.*?(\d+:\d+)\s*着.*?(\d+分)/);
+      const dtm = t.match(/(\d+:\d+)\s*発.*?(\d+:\d+)\s*着.*?(\d+時間\d+分|\d+分)/);
       if (dtm) { depTime = dtm[1]; arrTime = dtm[2]; duration = dtm[3]; }
       else {
         const times = t.match(/(\d+:\d+)/g);
