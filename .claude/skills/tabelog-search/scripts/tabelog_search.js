@@ -216,6 +216,7 @@ async function modeSearch() {
         const rvwItems = [];
         if (rvwSection) {
           for (const liM of rvwSection[1].matchAll(/<li[\s\S]*?<\/li>/g)) {
+            if (rvwItems.length >= 3) break;
             const li     = liM[0];
             const titleM = li.match(/<h4[^>]*>([\s\S]*?)<\/h4>/);
             const title  = titleM ? stripHtml(titleM[1]) : null;
