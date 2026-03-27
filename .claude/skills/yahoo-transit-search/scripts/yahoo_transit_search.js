@@ -12,16 +12,20 @@
 //       [--date YYYY-MM-DD] [--time HH:MM] \
 //       [--type dep|arr|first|last] \
 //       [--n 3]
+//     → Outputs route summaries + uniqueId. Full route data (with stops) is saved to
+//       /tmp/yahoo_transit_{uniqueId}.json for use by detail mode.
 //
 //   Mode 3 - Route detail (full stops for one route):
 //     node yahoo_transit_search.js --mode detail \
-//       --from "新宿" --to "渋谷" \
-//       [--from-code 22741] [--to-code 22715] \
-//       [--date YYYY-MM-DD] [--time HH:MM] \
-//       [--type dep|arr|first|last] \
+//       --id {uniqueId} \
 //       --route 1
+//     → Reads cached data from search. No HTTP request is made.
 
 const { execFileSync } = require('child_process');
+const crypto = require('crypto');
+const fs = require('fs');
+
+const CACHE_DIR = '/tmp';
 
 // --- Argument parsing ---
 const args = process.argv.slice(2);
@@ -38,6 +42,7 @@ const timeStr   = get('--time') || '';
 const typeArg   = get('--type') || 'dep';
 const n         = parseInt(get('--n') || '3', 10);
 const routeNum  = parseInt(get('--route') || '1', 10);
+const idArg     = get('--id') || '';
 
 // --- curl helper ---
 const CURL_HEADERS = [
@@ -408,43 +413,57 @@ function parseRouteSummary(block, idx) {
   return { route: num, priority: priorities, departure: depTime, arrival: arrTime, duration, transfers, fare, distance };
 }
 
-// --- Mode 2: search — returns route summaries with flow ---
+// --- Mode 2: search — returns route summaries with flow, saves full data to cache ---
 function modeSearch() {
   const html = fetchHtml();
   const routeBlocks = html.split(/<div id="route\d+">/);
-  const routes = [];
 
-  for (let i = 1; i <= Math.min(n, routeBlocks.length - 1); i++) {
+  // Parse ALL available routes with full stops for cache
+  const allRoutes = [];
+  for (let i = 1; i < routeBlocks.length; i++) {
     const block = routeBlocks[i];
     const summary = parseRouteSummary(block, i);
-
     const detailM = block.match(/<div class="routeDetail">([\s\S]*?)<\/div><\/div><\/div>/);
     const stops = detailM ? parseRouteDetail(detailM[1]) : [];
     summary.flow = stopsToFlow(stops);
-
-    routes.push(summary);
+    summary.stops = stops;
+    allRoutes.push(summary);
   }
 
-  console.log(JSON.stringify({ routes }, null, 2));
+  // Save full data to cache file
+  const uniqueId = crypto.randomBytes(3).toString('hex');
+  const cacheFile = `${CACHE_DIR}/yahoo_transit_${uniqueId}.json`;
+  fs.writeFileSync(cacheFile, JSON.stringify({ uniqueId, from, fromCode, to, toCode, routes: allRoutes }, null, 2));
+
+  // Output summaries (without stops) for the requested n routes, plus uniqueId
+  const summaries = allRoutes.slice(0, n).map(({ stops: _, ...r }) => r);
+  console.log(JSON.stringify({ uniqueId, routes: summaries }, null, 2));
 }
 
-// --- Mode 3: detail — returns full stops for one route ---
+// --- Mode 3: detail — reads full stops from cache file saved by search mode ---
 function modeDetail() {
-  const html = fetchHtml();
-  const routeBlocks = html.split(/<div id="route\d+">/);
-
-  if (routeNum < 1 || routeNum >= routeBlocks.length) {
-    console.error(`Error: route ${routeNum} not found (available: 1–${routeBlocks.length - 1})`);
+  if (!idArg) {
+    console.error('Error: --id is required for detail mode. Run search first to get a uniqueId.');
     process.exit(1);
   }
 
-  const block = routeBlocks[routeNum];
-  const summary = parseRouteSummary(block, routeNum);
+  const cacheFile = `${CACHE_DIR}/yahoo_transit_${idArg}.json`;
+  let cached;
+  try {
+    cached = JSON.parse(fs.readFileSync(cacheFile, 'utf8'));
+  } catch (e) {
+    console.error(`Error: no cache found for id "${idArg}". Run search first.`);
+    process.exit(1);
+  }
 
-  const detailM = block.match(/<div class="routeDetail">([\s\S]*?)<\/div><\/div><\/div>/);
-  const stops = detailM ? parseRouteDetail(detailM[1]) : [];
+  const route = cached.routes.find(r => r.route === String(routeNum));
+  if (!route) {
+    const available = cached.routes.map(r => r.route).join(', ');
+    console.error(`Error: route ${routeNum} not found in cache (available: ${available})`);
+    process.exit(1);
+  }
 
-  console.log(JSON.stringify({ ...summary, stops }, null, 2));
+  console.log(JSON.stringify(route, null, 2));
 }
 
 // --- Main ---
