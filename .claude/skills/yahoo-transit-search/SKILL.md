@@ -38,7 +38,7 @@ Returns JSON array:
 ```
 
 **Decision rules:**
-- **Non-empty results** → pick the best match. If it has a `code`, use `--from-code` / `--to-code` in the search to avoid disambiguation. If `code` is `""` (POI/landmark), use the `name` directly as `--from` / `--to`.
+- **Non-empty results** → pick the best match. Always use the `name` from the suggest result as `--from` / `--to` (not the original user input). If it has a `code`, also pass `--from-code` / `--to-code` to avoid disambiguation.
 - **Empty array `[]`** → suggest does not recognise the input (e.g. a full address). Skip to Step 2 and pass the original input directly as `--from` / `--to`.
 
 > Suggest results include both transit stops (with a numeric `code`) and landmarks/POI (with `code: ""`). Transit stops can be used with `--from-code` / `--to-code` for precise disambiguation. Landmarks with no code can be passed directly as `--from` / `--to` — Yahoo Transit will geocode them automatically.
