@@ -118,7 +118,13 @@ Returns JSON:
 
 If the output contains a `"disambiguation"` key, inform the user of the candidates and ask which station to use (or pick the most obvious match). Then re-run with `--from-code` / `--to-code`.
 
-**When to run Mode 1 first:** Only if the station name is highly ambiguous (e.g. generic terms) and you need to find an exact station. For common names like "新宿", Mode 2 already returns disambiguation info in the response without a separate suggest call.
+**When to run Mode 1 first:**
+- The input is a **landmark or attraction name** (e.g. 東京スカイツリー, 大阪城, 浅草寺) — always run suggest first to find the nearest transit stop with a code, then use `--from-code` / `--to-code` in the search.
+- The station name is **highly ambiguous** and you need to confirm the exact station.
+
+For common unambiguous station names like "新宿", Mode 2 already returns disambiguation info in the response without a separate suggest call.
+
+> **Note:** Suggest results only include entries with a valid transit code. POI/address-only entries (landmarks without a dedicated stop) are filtered out automatically.
 
 ---
 
