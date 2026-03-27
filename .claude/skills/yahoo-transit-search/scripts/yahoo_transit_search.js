@@ -175,9 +175,11 @@ function parseRouteDetail(detailHtml) {
         // Line name (text after icons, before <span class="destination">)
         const lineDiv = t.match(/<div>([\s\S]*?)<\/div>/);
         if (lineDiv) {
-          const lineText = stripHtml(lineDiv[1].replace(/<span class="destination">[\s\S]*?<\/span>/, ''));
+          // Greedy match removes the entire destination span including nested spans (e.g. icnFirstTrain)
+          const lineText = stripHtml(lineDiv[1].replace(/<span class="destination">[\s\S]*<\/span>/, ''));
           stop.line = lineText;
-          const destM = t.match(/class="destination">([\s\S]*?)<\/span>/);
+          // Anchor to </span></div> so nested spans (e.g. <span class="icnFirstTrain">) don't cut short
+          const destM = t.match(/class="destination">([\s\S]*?)<\/span>\s*<\/div>/);
           if (destM) stop.direction = stripHtml(destM[1]);
         }
         // Platform
