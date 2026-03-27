@@ -1,6 +1,6 @@
 ---
 name: yahoo-transit-search
-description: Search train/bus routes on Yahoo Transit (transit.yahoo.co.jp). Use this skill whenever the user wants to find transit routes in Japan — searching by departure/arrival station, date/time, or direction type. Covers tasks like "新宿から渋谷まで行きたい", "東京から大阪 新幹線", "明日の朝9時に渋谷着くには", "終電を調べて", "乗換案内". Also handles station disambiguation and specifying arrival time vs departure time.
+description: Search train/bus routes on Yahoo Transit (transit.yahoo.co.jp). Use this skill whenever the user wants to find transit routes in Japan — searching by departure/arrival station, date/time, or direction type. Covers tasks like "新宿から渋谷まで行きたい", "東京から大阪 新幹線", "明日の朝9時に渋谷着くには", "終電を調べて", "乗換案内", "京都駅から金閣寺までバスで行きたい", "バスの乗り換え調べて". Also handles station disambiguation, bus stops, landmarks as destinations, and specifying arrival time vs departure time.
 allowed-tools: Bash
 ---
 
