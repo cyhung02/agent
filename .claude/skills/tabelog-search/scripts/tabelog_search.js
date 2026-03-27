@@ -30,7 +30,8 @@ const CURL_HEADERS = [
   '-H', 'User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
 ];
 
-// Fetch JSON from Tabelog internal API (sync)
+// Fetch JSON array from Tabelog internal API (sync)
+// Returns [] on empty/non-array responses (e.g. {"suggest_empty":true})
 function apiGet(urlStr) {
   const result = execFileSync('curl', [
     '-s', '--fail',
@@ -38,7 +39,8 @@ function apiGet(urlStr) {
     '-H', 'Accept: application/json, text/javascript, */*',
     urlStr,
   ], { encoding: 'utf8' });
-  return JSON.parse(result);
+  const parsed = JSON.parse(result);
+  return Array.isArray(parsed) ? parsed : [];
 }
 
 // Follow redirect and return final URL (sync)
@@ -77,8 +79,10 @@ function stripHtml(str) {
 async function modeSuggest() {
   const BASE = 'https://tabelog.com/internal_api/suggest_form_words';
 
-  // Area suggest
-  const areaData = apiGet(`${BASE}?sa=${encodeURIComponent(area)}`);
+  // Area suggest — use first token only (same as Mode 2) to avoid empty results
+  // e.g. "腰越(神奈川県 鎌倉市)" → query "腰越(神奈川県" → returns correct matches
+  const areaQuery = area.split(/\s/)[0];
+  const areaData = apiGet(`${BASE}?sa=${encodeURIComponent(areaQuery)}`);
   const areaSuggestions = areaData.map(item => item.name);
 
   // Keyword suggest — pass first area result's datatype/id for scoped suggestions
