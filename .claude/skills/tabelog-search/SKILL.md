@@ -49,7 +49,7 @@ Returns JSON:
 1. If the user didn't specify a keyword, omit `--keyword` entirely.
 2. If the user's intent is **vegetarian**, omit `--keyword` entirely — the `--vegetarian` filter in Step 3 handles this.
 3. If the user specified a **cuisine/genre type**: look for a matching genre category in `keyword_suggestions` (e.g. `"焼肉・ホルモン"`, `"カフェ・喫茶店"`) and use it as an exact match.
-4. If the user specified a **restaurant name**: look for the same restaurant in `keyword_suggestions` (fuzzy match — use your judgement, no need for exact character match) and use it as an exact match.
+4. If the user specified a **restaurant name**: look for the same restaurant in `keyword_suggestions` and use it as an exact match.
 5. If no suitable match is found in either case (e.g. user gave a genre but only restaurant names appear, or user gave a restaurant name but no matching restaurant appears), pass the user's raw keyword as free text.
 
 ---
