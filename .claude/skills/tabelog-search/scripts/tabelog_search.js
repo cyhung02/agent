@@ -17,6 +17,7 @@ Module._initPaths();
 
 const { chromium } = require('playwright');
 const { URL } = require('url');
+const { execFileSync } = require('child_process');
 
 // --- Argument parsing ---
 const args = process.argv.slice(2);
@@ -76,26 +77,36 @@ async function getSuggestions(page, inputSelector, text) {
   }
 }
 
+// --- API helper: GET /internal_api/suggest_form_words via curl (respects HTTP_PROXY) ---
+function apiGet(urlStr) {
+  const result = execFileSync('curl', [
+    '-s', '--fail',
+    '-H', 'Referer: https://tabelog.com/',
+    '-H', 'User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    '-H', 'Accept: application/json, text/javascript, */*',
+    urlStr,
+  ], { encoding: 'utf8' });
+  return JSON.parse(result);
+}
+
 // --- Mode 1: suggest ---
 async function modeSuggest() {
-  const browser = await launchBrowser();
-  const context = await browser.newContext({ ignoreHTTPSErrors: true });
-  const page = await context.newPage();
+  const BASE = 'https://tabelog.com/internal_api/suggest_form_words';
 
-  await openTabelog(page);
+  // Area suggest
+  const areaData = await apiGet(`${BASE}?sa=${encodeURIComponent(area)}`);
+  const areaSuggestions = areaData.map(item => item.name);
 
-  const areaSuggestions = await getSuggestions(page, '#sa', area);
-
-  // Dismiss area autocomplete before typing keyword
-  await page.keyboard.press('Escape');
-  await page.waitForTimeout(300);
-
+  // Keyword suggest — pass first area result's datatype/id for scoped suggestions
   let keywordSuggestions = [];
   if (keyword) {
-    keywordSuggestions = await getSuggestions(page, '#sk', keyword);
+    const firstArea = areaData[0] || {};
+    const params = new URLSearchParams({ sk: keyword });
+    if (firstArea.datatype)       params.set('area_datatype', firstArea.datatype);
+    if (firstArea.id_in_datatype) params.set('area_id', String(firstArea.id_in_datatype));
+    const kwData = await apiGet(`${BASE}?${params}`);
+    keywordSuggestions = kwData.map(item => item.name);
   }
-
-  await browser.close();
 
   console.log(JSON.stringify({ area_suggestions: areaSuggestions, keyword_suggestions: keywordSuggestions }, null, 2));
 }
