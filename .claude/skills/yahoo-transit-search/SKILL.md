@@ -54,8 +54,8 @@ node scripts/yahoo_transit_search.js \
   --to "渋谷" \
   [--from-code 22741]          # optional: station code from suggest
   [--to-code 22715]            # optional
-  [--date YYYY-MM-DD]          # default: today
-  [--time HH:MM]               # default: now
+  [--date YYYY-MM-DD]          # default: today (Japan time, JST = UTC+9)
+  [--time HH:MM]               # default: now (Japan time, JST = UTC+9)
   [--type dep|arr|first|last]  # dep=出発(default), arr=到着, first=始発, last=終電
   [--n 3]                      # number of routes to return (default: 3)
 ```
