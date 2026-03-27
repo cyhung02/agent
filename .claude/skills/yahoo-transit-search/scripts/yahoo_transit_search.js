@@ -223,6 +223,11 @@ function parseRouteDetail(detailHtml) {
       } else {
         if (pendingBaseFareIdx !== null && pendingBaseFareIdx < stops.length) {
           stops[pendingBaseFareIdx].segmentFare = fareText;
+          // The outer fareSection closes at this block's station; if that opening stop
+          // also has an expressFare, record the closing station as expressFareTo.
+          if (stops[pendingBaseFareIdx].expressFare) {
+            stops[pendingBaseFareIdx].expressFareTo = stop.station;
+          }
         } else {
           stop.segmentFare = fareText;
         }
