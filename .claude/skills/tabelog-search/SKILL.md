@@ -8,6 +8,18 @@ allowed-tools: Bash
 
 Search tabelog.com using the bundled `tabelog_search.js` script. The script handles all browser automation internally — no manual playwright steps needed.
 
+## Step 0 — Locate the Script
+
+Before running any commands, find the actual path of `tabelog_search.js`:
+
+```bash
+find /mnt/skills/user /root/.claude/skills /home/user -name "tabelog_search.js" 2>/dev/null | head -1
+```
+
+Use the returned absolute path in all subsequent `node <script>` commands instead of the relative `scripts/tabelog_search.js`.
+
+---
+
 ## Overview: Two-Mode Design
 
 Tabelog uses autocomplete to resolve area and keyword input into internal IDs. You cannot construct URLs manually or type free text and get reliable results. To handle this correctly, the workflow is split into two modes:

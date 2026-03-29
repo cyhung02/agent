@@ -8,6 +8,18 @@ allowed-tools: Bash
 
 Search transit routes using `scripts/yahoo_transit_search.js`. The script handles all HTTP requests internally — no browser needed.
 
+## Step 0 — Locate the Script
+
+Before running any commands, find the actual path of `yahoo_transit_search.js`:
+
+```bash
+find /mnt/skills/user /root/.claude/skills /home/user -name "yahoo_transit_search.js" 2>/dev/null | head -1
+```
+
+Use the returned absolute path in all subsequent `node <script>` commands instead of the relative `scripts/yahoo_transit_search.js`.
+
+---
+
 ## Overview: Three-Mode Design
 
 - **Mode 1 (suggest)**: Station/landmark autocomplete with codes.
