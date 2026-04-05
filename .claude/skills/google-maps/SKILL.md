@@ -14,7 +14,7 @@ description: >
 
 # Google Maps Skill
 
-Direct curl calls to Google Maps Platform APIs. No script needed.
+Direct curl calls to Google Maps Platform APIs.
 
 ## API Key
 
