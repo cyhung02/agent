@@ -23,14 +23,12 @@ Tabelog uses autocomplete to resolve area and keyword input into internal IDs. Y
 - **Mode 1 (suggest)**: Fetches autocomplete suggestions for area and keyword. You examine the results and decide which values to use.
 - **Mode 2 (search)**: Executes the full search with your chosen values and returns restaurant details.
 
-The script is scripts/tabelog_search.js
-
 ---
 
 ## Step 1 — Run Mode 1: Get Suggestions
 
 ```bash
-node scripts/tabelog_search.js \
+node <path> \
   --mode suggest \
   --area "大阪" \
   --keyword "焼肉"   # omit if user didn't specify a cuisine/keyword, or if the intent is vegetarian (use --vegetarian filter in Step 3 instead)
@@ -62,7 +60,7 @@ Returns JSON:
 ## Step 3 — Run Mode 2: Full Search
 
 ```bash
-node scripts/tabelog_search.js \
+node <path> \
   --mode search \
   --area "大阪市" \
   --keyword "焼肉・ホルモン" \   # omit if no keyword
