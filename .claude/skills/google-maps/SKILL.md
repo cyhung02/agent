@@ -9,7 +9,7 @@ description: >
   location-based queries — even if they don't explicitly mention "Google Maps".
   Triggers: 步行距離、步行時間、走路幾分鐘、開車幾分鐘、從A到B怎麼走、地址座標、
   附近多遠、路線規劃、附近餐廳、附近便利商店、周邊設施、地點搜尋、地點照片、
-  walking distance, travel time, directions, how far, route, nearby, search places, place photo.
+  walking distance, travel time, directions, route, nearby, search places, place photo.
 ---
 
 # Google Maps Skill
@@ -18,7 +18,7 @@ Direct curl calls to Google Maps Platform APIs. No script needed.
 
 ## API Key
 
-Read from env or memory: `GMAPS_API_KEY`
+Read from env or user preferences: `GMAPS_API_KEY`
 
 ## Decision Guide
 
@@ -28,6 +28,7 @@ Pick the right API before making any call:
 |---|---|
 | 「從A走到B要多久」 | Directions API |
 | 「這個地址的座標是什麼」 | Geocoding API |
+| 「新宿駅、東京鐵塔的座標」（一般地名）| Text Search（比 Geocoding 省配額）|
 | 「新宿附近好吃的拉麵」 | Text Search |
 | 「飯店300m內的便利商店」 | Nearby Search |
 | 「這幾個景點怎麼排最省時間」 | Distance Matrix |
@@ -44,8 +45,6 @@ curl -s "https://maps.googleapis.com/maps/api/directions/json?origin=<lat>,<lng>
 
 - `mode`: `walking` | `driving` | `transit` | `bicycling`
 - Key fields: `routes[0].legs[0].distance.value` (meters), `routes[0].legs[0].duration.value` (seconds)
-- Check `status === "OK"` before reading results
-- Free tier: 10,000 requests/month, quota 320/day
 
 ---
 
@@ -69,8 +68,6 @@ curl -s "https://maps.googleapis.com/maps/api/geocode/json?latlng=<lat>,<lng>&la
 ```
 
 - Key fields: `results[0].formatted_address`, `results[0].geometry.location.lat/lng`, `results[0].place_id`
-- Check `status === "OK"` before reading results
-- Free tier: 10,000 requests/month, quota 160/day
 
 ---
 
@@ -88,8 +85,6 @@ curl -s -X POST "https://places.googleapis.com/v1/places:searchText" \
 ```
 
 - `locationBias` is optional — omit if you don't have a center point
-- Places API returns HTTP 200 even on errors — always check for `error` field in response
-- Free tier: 5,000 requests/month (Pro SKU), quota 160/day
 
 ---
 
@@ -107,8 +102,6 @@ curl -s -X POST "https://places.googleapis.com/v1/places:searchNearby" \
 ```
 
 - Common `includedTypes`: `convenience_store`, `restaurant`, `atm`, `pharmacy`, `subway_station`, `bus_stop`
-- Places API returns HTTP 200 even on errors — always check for `error` field in response
-- Free tier: 5,000 requests/month (Pro SKU), quota 160/day
 
 ---
 
@@ -124,8 +117,6 @@ curl -s "https://maps.googleapis.com/maps/api/distancematrix/json?origins=<lat1>
 - Returns N×M matrix: every origin to every destination
 - Key fields: `rows[i].elements[j].distance.value` (meters), `rows[i].elements[j].duration.value` (seconds)
 - Billed per element (origins × destinations), not per request
-- Check `status === "OK"` before reading results
-- Free tier: 10,000 elements/month, quota 160/day
 
 ---
 
@@ -137,14 +128,11 @@ curl -s "https://places.googleapis.com/v1/places/<place_id>" \
   -H "X-Goog-FieldMask: displayName,formattedAddress,location,rating,regularOpeningHours,internationalPhoneNumber,websiteUri"
 ```
 
-- Places API returns HTTP 200 even on errors — always check for `error` field in response
-- Free tier: 5,000 requests/month (Pro SKU), quota 160/day
-
 ---
 
 ## 7. Place Photos — Fetch and display place photos
 
-**Step 1 — Get photo names:**
+**Step 1 — Get photo names** (skip if you already fetched Place Details with `photos` in FieldMask):
 
 ```bash
 curl -s "https://places.googleapis.com/v1/places/<place_id>" \
@@ -170,14 +158,11 @@ curl -sL "<photoUri>" -o /mnt/user-data/outputs/place_photo.jpg
 
 - `skipHttpRedirect=true` → returns JSON with `photoUri` instead of redirecting to the image
 - Size control: `maxHeightPx` / `maxWidthPx` (up to 4800px)
-- Free tier: 1,000 requests/month, quota 30/day
 
 ---
 
 ## Important Notes
 
-- Use Directions API (`maps.googleapis.com`), NOT Routes API (`routes.googleapis.com`)
-  → Routes API has GFE-level IP restrictions in this environment
 - Check `status === "OK"` for Directions / Geocoding / Distance Matrix responses
 - Places API (v1) returns HTTP 200 even on errors — always check for an `error` field
 - Place Photos: download to `/mnt/user-data/outputs/` then use `present_files` to display
