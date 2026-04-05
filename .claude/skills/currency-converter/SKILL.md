@@ -168,22 +168,6 @@ twd = foreign_amount * jcb_rates['JPY']
   10,000 TWD ≈ 49,738 JPY
 ```
 
-### LINE broadcast format (keep under 500 characters)
-
-```
-💱 Today's Rates (2026-04-04)
-1 TWD ≈ 4.97 JPY
-1 TWD ≈ 0.244 HKD
-1 TWD ≈ 0.031 USD
-
-Common conversions:
-・1,000 TWD = 4,974 JPY
-・3,000 TWD = 14,921 JPY
-・5,000 TWD = 24,869 JPY
-```
-
----
-
 ## Common Query Patterns
 
 |User input            |Action                                        |
@@ -191,7 +175,6 @@ Common conversions:
 |"1000 台幣換多少日幣"        |open.er-api + MC correction, TWD → JPY        |
 |"3000 円是多少台幣"         |open.er-api + MC correction, JPY → TWD        |
 |"今天匯率"                |open.er-api, show travel rate overview        |
-|"整理匯率廣播 LINE"         |open.er-api, output LINE broadcast format     |
 |"500 HKD 多少台幣"        |open.er-api + MC correction, HKD → TWD        |
 |"JCB 匯率" / "今天 JCB 多少"|Parse JCB PDF, show latest day rates          |
 |"JCB 還是 MC 比較划算"      |Fetch both sources, compare JPY rate for today|
