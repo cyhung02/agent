@@ -10,13 +10,9 @@ Search transit routes using `scripts/yahoo_transit_search.js`. The script handle
 
 ## Step 0 — Locate the Script
 
-Before running any commands, find the actual path of `yahoo_transit_search.js`:
+Before running any commands, use the **find-skill-script** skill to resolve the absolute path of `yahoo_transit_search.js` under the `scripts/` subdirectory.
 
-```bash
-find /mnt/skills/user /root/.claude/skills /home/user -name "yahoo_transit_search.js" 2>/dev/null | head -1
-```
-
-Use the returned absolute path in all subsequent `node <script>` commands instead of the relative `scripts/yahoo_transit_search.js`.
+Use the returned absolute path in all subsequent `node <yahoo_transit_search.js path>` commands instead of the relative `scripts/yahoo_transit_search.js`.
 
 ---
 
@@ -26,8 +22,6 @@ Use the returned absolute path in all subsequent `node <script>` commands instea
 - **Mode 2 (search)**: Route list — summaries with compact flow overview.
 - **Mode 3 (detail)**: Full stop-by-stop detail for one specific route.
 
-The script is `scripts/yahoo_transit_search.js`
-
 ---
 
 ## Step 1 — Run Mode 1: Get Suggestions (always)
@@ -35,7 +29,7 @@ The script is `scripts/yahoo_transit_search.js`
 Always run suggest first for both `--from` and `--to` inputs, regardless of whether the input is a station name, landmark, or address.
 
 ```bash
-node scripts/yahoo_transit_search.js \
+node <yahoo_transit_search.js path> \
   --mode suggest \
   --station "新宿"
 ```
@@ -60,7 +54,7 @@ Returns JSON array:
 ## Step 2 — Run Mode 2: Search Routes
 
 ```bash
-node scripts/yahoo_transit_search.js \
+node <yahoo_transit_search.js path> \
   --mode search \
   --from "新宿" \
   --to "渋谷" \
@@ -108,7 +102,7 @@ Present the route summaries to the user and ask which route they want details fo
 After the user selects a route, read the full stop-by-stop detail from the cached file. **No HTTP request is made.**
 
 ```bash
-node scripts/yahoo_transit_search.js \
+node <yahoo_transit_search.js path> \
   --mode detail \
   --id a3f9c2 \               # required: uniqueId from search result
   --route 1                   # required: route number from search results

@@ -8,36 +8,44 @@ allowed-tools: Bash(playwright-cli:*)
 
 ## Requirement
 
+Before running any setup scripts, use the **find-skill-script** skill to resolve the absolute paths of the following files under the `scripts/` subdirectory:
+
+- `install-playwright-cli.sh`
+- `update-playwright-proxy.sh`
+- `cli.config.json`
+
+Use the returned absolute paths in all subsequent commands below.
+
 If playwright-cli is not installed on your system, run the install script:
 
 ```bash
-bash scripts/install-playwright-cli.sh
+bash <path-to-install-playwright-cli.sh>
 ```
 
 ### Configuration Setup
 
 playwright-cli reads `~/.playwright/cli.config.json`. To ensure proper configuration:
 
-1. Copy `scripts/cli.config.json` to `~/.playwright/cli.config.json`:
+1. Copy `cli.config.json` to `~/.playwright/cli.config.json`:
    ```bash
-   cp scripts/cli.config.json ~/.playwright/cli.config.json
+   cp <path-to-cli.config.json> ~/.playwright/cli.config.json
    ```
 2. Due to Claude Sandbox environment restrictions, playwright-cli requires a proxy to connect to external networks. Run the proxy setup script:
    ```bash
-   bash scripts/update-playwright-proxy.sh
+   bash <path-to-update-playwright-proxy.sh>
    ```
 
 ### Troubleshooting
 
 **Chrome reports it needs to run in a no-sandbox environment:**
 1. Check if `~/.playwright/cli.config.json` exists:
-   - If **no**: copy from `scripts/cli.config.json` and run `scripts/update-playwright-proxy.sh`.
-2. Ensure the home-directory wrapper is installed by running `bash scripts/install-playwright-cli.sh`.
+   - If **no**: copy from resolved `cli.config.json` path and run resolved `update-playwright-proxy.sh`.
+2. Ensure the home-directory wrapper is installed by running resolved `install-playwright-cli.sh`.
 
 **playwright-cli cannot connect to external sites:**
 1. Check if `~/.playwright/cli.config.json` exists:
-   - If **no**: copy from `scripts/cli.config.json` and run `scripts/update-playwright-proxy.sh`.
-   - If **yes**: run `scripts/update-playwright-proxy.sh` to refresh the proxy settings.
+   - If **no**: copy from resolved `cli.config.json` path and run resolved `update-playwright-proxy.sh`.
+   - If **yes**: run resolved `update-playwright-proxy.sh` to refresh the proxy settings.
 
 ## Quick start
 
