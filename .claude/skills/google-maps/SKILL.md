@@ -18,7 +18,7 @@ Direct curl calls to Google Maps Platform APIs. No script needed.
 
 ## API Key
 
-Read from env or memory: `GMAPS_API_KEY`
+Read from env or user preferences: `GMAPS_API_KEY`
 
 ## Decision Guide
 
