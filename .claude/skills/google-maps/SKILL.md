@@ -163,8 +163,6 @@ curl -sL "<photoUri>" -o /mnt/user-data/outputs/place_photo.jpg
 
 ## Important Notes
 
-- Use Directions API (`maps.googleapis.com`), NOT Routes API (`routes.googleapis.com`)
-  → Routes API has GFE-level IP restrictions in this environment
 - Check `status === "OK"` for Directions / Geocoding / Distance Matrix responses
 - Places API (v1) returns HTTP 200 even on errors — always check for an `error` field
 - Place Photos: download to `/mnt/user-data/outputs/` then use `present_files` to display
