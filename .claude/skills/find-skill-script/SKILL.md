@@ -1,20 +1,22 @@
 ---
 name: find-skill-script
-description: Locate the absolute path of a bundled skill script file. Use this skill whenever you need to find the actual on-disk path of a script that ships with a skill (e.g. tabelog_search.js, any_script.js) before running it with node or bash, because the script may be mounted at different paths depending on the environment.
+description: Locate the absolute path of one or more bundled skill script files. Use this skill whenever you need to find the actual on-disk path of scripts that ship with a skill (e.g. tabelog_search.js, install-playwright-cli.sh, cli.config.json) before running them with node or bash, because scripts may be mounted at different paths depending on the environment.
 allowed-tools: Bash
 ---
 
 # Find Skill Script
 
-Use this skill to resolve the absolute path of a skill script before executing it.
+Use this skill to resolve absolute paths of skill scripts before executing them.
 
 ## Step — Run the find command
 
-Replace `<script_filename>` with the exact filename (e.g. `tabelog_search.js`):
+For each file you need to locate, replace `<script_filename>` with the exact filename:
 
 ```bash
 find /mnt/skills/user /root/.claude/skills /home/user -name "<script_filename>" 2>/dev/null | head -1
 ```
+
+If you need multiple files, run the command once per filename.
 
 The command searches common skill mount points in order:
 1. `/mnt/skills/user` — runtime skill mount (Claude Code on the web)
