@@ -48,44 +48,10 @@ Output:
 
 ## Mode 2: JCB rates (official PDF)
 
+Run `scripts/fetch_jcb_rates.py` to get a rates dict:
+
 ```python
-import re, urllib.request, fitz
-
-req = urllib.request.Request(
-    'https://www.specialoffers.jcb/zh-tw/services/other/rate/',
-    headers={'User-Agent': 'Mozilla/5.0'}
-)
-html = urllib.request.urlopen(req).read().decode('utf-8')
-pdfs = re.findall(r'href="(/zh-tw/services/[a-f0-9_]+\.pdf)"', html)
-pdf_url = 'https://www.specialoffers.jcb' + pdfs[0]
-
-pdf_data = urllib.request.urlopen(
-    urllib.request.Request(pdf_url, headers={'User-Agent': 'Mozilla/5.0'})
-).read()
-doc = fitz.open(stream=pdf_data, filetype='pdf')
-text = ''.join(page.get_text() for page in doc)
-lines = [l.strip() for l in text.strip().split('\n') if l.strip()]
-
-# Read currency order from header
-header_start = next(i for i, l in enumerate(lines) if l == 'JCB Exchange Rate')
-currencies, j = [], header_start + 1
-while j < len(lines) and re.match(r'^[A-Z]{3}$', lines[j]):
-    currencies.append(lines[j]); j += 1
-
-# Find latest day with a full set of rates
-latest_day, latest_rates = None, None
-for i, line in enumerate(lines):
-    m = re.match(r'^(\d+)日$', line)
-    if m:
-        values, k = [], i + 1
-        while len(values) < len(currencies) and k < len(lines):
-            try: values.append(float(lines[k]))
-            except: break
-            k += 1
-        if len(values) == len(currencies):
-            latest_day, latest_rates = int(m.group(1)), values
-
-rates = dict(zip(currencies, latest_rates))
+rates = fetch_jcb_rates()
 # rates['JPY'] = X means: 1 JPY = X TWD (opposite of open.er-api)
 ```
 
