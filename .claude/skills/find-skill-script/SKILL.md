@@ -10,10 +10,16 @@ Use this skill to resolve absolute paths of skill scripts before executing them.
 
 ## Step — Run the find command
 
-For each file you need to locate, replace `<script_filename>` with the exact filename:
+Choose the appropriate form depending on whether the caller specifies a subdirectory:
 
+**With subdirectory constraint** (e.g. file must be inside `scripts/`):
 ```bash
-find /mnt/skills/user /root/.claude/skills /home/user -path "*/scripts/<script_filename>" 2>/dev/null | head -1
+find /mnt/skills/user /root/.claude/skills /home/user -path "*/<subdir>/<script_filename>" 2>/dev/null | head -1
+```
+
+**Without subdirectory constraint** (file can be anywhere under the skill):
+```bash
+find /mnt/skills/user /root/.claude/skills /home/user -name "<script_filename>" 2>/dev/null | head -1
 ```
 
 If you need multiple files, run the command once per filename.

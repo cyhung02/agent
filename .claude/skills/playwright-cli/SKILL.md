@@ -8,7 +8,7 @@ allowed-tools: Bash(playwright-cli:*)
 
 ## Requirement
 
-Before running any setup scripts, use the **find-skill-script** skill to resolve the absolute paths of the following files:
+Before running any setup scripts, use the **find-skill-script** skill to resolve the absolute paths of the following files under the `scripts/` subdirectory:
 
 - `install-playwright-cli.sh`
 - `update-playwright-proxy.sh`
