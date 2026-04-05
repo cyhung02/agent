@@ -79,12 +79,20 @@ Use for open exploration, restaurant recommendations ("新宿附近拉麵推薦"
 ```bash
 curl -s -X POST "https://places.googleapis.com/v1/places:searchText" \
   -H "X-Goog-Api-Key: $GMAPS_API_KEY" \
-  -H "X-Goog-FieldMask: places.displayName,places.formattedAddress,places.rating,places.location,places.regularOpeningHours,places.internationalPhoneNumber" \
+  -H "X-Goog-FieldMask: places.displayName,places.formattedAddress,places.rating,places.location,places.regularOpeningHours,places.internationalPhoneNumber,places.priceLevel" \
   -H "Content-Type: application/json" \
   -d '{"textQuery": "<query>", "maxResultCount": 5, "locationBias": {"circle": {"center": {"latitude": <lat>, "longitude": <lng>}, "radius": <meters>}}}'
 ```
 
 - `locationBias` is optional — omit if you don't have a center point
+- Optional request filters:
+  - `"minRating": 4.0` — minimum rating threshold (0.0–5.0, steps of 0.5)
+  - `"priceLevels": ["PRICE_LEVEL_INEXPENSIVE", "PRICE_LEVEL_MODERATE"]` — filter by price level
+  - `"includePureServiceAreaBusinesses": true` — include delivery-only businesses (no physical address)
+- Optional FieldMask fields (higher billing tier):
+  - `places.websiteUri` — official website
+  - `places.evChargeOptions` — EV charging connector types and rates
+  - `places.generativeSummary` — AI-generated place & review summary (Enterprise + Atmosphere SKU)
 
 ---
 
@@ -101,7 +109,10 @@ curl -s -X POST "https://places.googleapis.com/v1/places:searchNearby" \
   -d '{"includedTypes": ["<type>"], "maxResultCount": 5, "locationRestriction": {"circle": {"center": {"latitude": <lat>, "longitude": <lng>}, "radius": <meters>}}}'
 ```
 
-- Common `includedTypes`: `convenience_store`, `restaurant`, `atm`, `pharmacy`, `subway_station`, `bus_stop`
+- Common `includedTypes`: `convenience_store`, `restaurant`, `atm`, `pharmacy`, `subway_station`, `bus_stop`, `electric_vehicle_charging_station`
+- Use `excludedTypes` to exclude specific types (up to 50 each)
+- Use `includedPrimaryTypes` / `excludedPrimaryTypes` to filter by a place's primary type only
+- Optional FieldMask: `places.evChargeOptions`, `places.generativeSummary`
 
 ---
 
@@ -125,8 +136,17 @@ curl -s "https://maps.googleapis.com/maps/api/distancematrix/json?origins=<lat1>
 ```bash
 curl -s "https://places.googleapis.com/v1/places/<place_id>" \
   -H "X-Goog-Api-Key: $GMAPS_API_KEY" \
-  -H "X-Goog-FieldMask: displayName,formattedAddress,location,rating,regularOpeningHours,internationalPhoneNumber,websiteUri"
+  -H "X-Goog-FieldMask: displayName,formattedAddress,location,rating,regularOpeningHours,internationalPhoneNumber,websiteUri,priceLevel"
 ```
+
+Additional FieldMask options:
+- `accessibilityOptions` — wheelchair ramp, accessible parking, etc.
+- `parkingOptions` — free/paid parking, valet, etc.
+- `paymentOptions` — accepts credit card, cash only, etc.
+- `evChargeOptions` — EV charging connectors and rates
+- `fuelOptions` — fuel types available (for gas stations)
+- `googleMapsLinks` — direct Google Maps link for this place
+- `generativeSummary` — AI-generated summary (Enterprise + Atmosphere SKU)
 
 ---
 
@@ -158,6 +178,7 @@ curl -sL "<photoUri>" -o /mnt/user-data/outputs/place_photo.jpg
 
 - `skipHttpRedirect=true` → returns JSON with `photoUri` instead of redirecting to the image
 - Size control: `maxHeightPx` / `maxWidthPx` (up to 4800px)
+- Photo names may expire — always fetch from a fresh search/details response, do not cache
 
 ---
 
