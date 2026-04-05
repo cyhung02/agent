@@ -1,0 +1,19 @@
+{
+  "eval_id": 3,
+  "eval_name": "geocoding-taipei-address-to-coordinates",
+  "prompt": "台北市大安區忠孝東路四段216巷33號的 GPS 座標是多少？",
+  "assertions": [
+    {
+      "name": "has_latitude",
+      "description": "Response contains a latitude value (should be around 25.04xx)"
+    },
+    {
+      "name": "has_longitude",
+      "description": "Response contains a longitude value (should be around 121.5xxx)"
+    },
+    {
+      "name": "uses_live_api_data",
+      "description": "Response is based on actual Geocoding API call rather than general knowledge"
+    }
+  ]
+}

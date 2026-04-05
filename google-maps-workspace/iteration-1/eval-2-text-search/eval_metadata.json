@@ -1,0 +1,23 @@
+{
+  "eval_id": 2,
+  "eval_name": "text-search-ramen-near-shinjuku",
+  "prompt": "我住在東京新宿車站附近，想找附近評分不錯的拉麵店，請推薦幾間並告訴我地址和評分",
+  "assertions": [
+    {
+      "name": "has_multiple_restaurants",
+      "description": "Response lists at least 3 restaurants"
+    },
+    {
+      "name": "has_address_for_each",
+      "description": "Each restaurant entry includes an address"
+    },
+    {
+      "name": "has_rating_for_each",
+      "description": "Each restaurant entry includes a numeric rating"
+    },
+    {
+      "name": "uses_live_api_data",
+      "description": "Response is based on actual Places API call rather than general knowledge"
+    }
+  ]
+}

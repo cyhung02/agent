@@ -1,0 +1,19 @@
+{
+  "eval_id": 1,
+  "eval_name": "directions-walking-taipei101-to-xiangshan",
+  "prompt": "我現在在台北101（信義路五段7號），想走路去象山捷運站，請問大概要走多久？距離多少公尺？",
+  "assertions": [
+    {
+      "name": "has_distance_value",
+      "description": "Response contains a specific distance value in meters or km"
+    },
+    {
+      "name": "has_duration_value",
+      "description": "Response contains a specific walking time in minutes"
+    },
+    {
+      "name": "uses_live_api_data",
+      "description": "Response is based on actual API call rather than general knowledge guess"
+    }
+  ]
+}
