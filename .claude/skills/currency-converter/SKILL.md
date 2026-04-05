@@ -48,7 +48,9 @@ Output:
 
 ## Mode 2: JCB rates (official PDF)
 
-Run `scripts/fetch_jcb_rates.py` to get a rates dict:
+First, use the **find-skill-script** skill to resolve the absolute path of `fetch_jcb_rates.py` under the `scripts/` subdirectory.
+
+Run `<fetch_jcb_rates.py path>` to get a rates dict:
 
 ```python
 rates = fetch_jcb_rates()
