@@ -10,13 +10,9 @@ Search tabelog.com using the bundled `tabelog_search.js` script. The script hand
 
 ## Step 0 — Locate the Script
 
-Before running any commands, find the actual path of `tabelog_search.js`:
+Before running any commands, use the **find-skill-script** skill to resolve the absolute path of `tabelog_search.js`.
 
-```bash
-find /mnt/skills/user /root/.claude/skills /home/user -name "tabelog_search.js" 2>/dev/null | head -1
-```
-
-Use the returned absolute path in all subsequent `node <script>` commands instead of the relative `scripts/tabelog_search.js`.
+Invoke the skill with `tabelog_search.js` as the target filename. Use the returned absolute path in all subsequent `node <path>` commands instead of the relative `scripts/tabelog_search.js`.
 
 ---
 
