@@ -31,6 +31,6 @@ The command searches common skill mount points in order:
 
 ## Output
 
-The returned line is the absolute path. Use it in all subsequent `node <path>` or `bash <path>` calls instead of any relative path.
+The returned line is the absolute path. Use it in all subsequent `node` or `bash` calls instead of any relative path — name the placeholder clearly, e.g. `node <tabelog_search.js path>`.
 
 If the command returns nothing, the script is not available in this environment — report the error to the user.

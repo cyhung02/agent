@@ -12,7 +12,7 @@ Search tabelog.com using the bundled `tabelog_search.js` script. The script hand
 
 Before running any commands, use the **find-skill-script** skill to resolve the absolute path of `tabelog_search.js` under the `scripts/` subdirectory.
 
-Use the returned absolute path in all subsequent `node <path>` commands instead of the relative `scripts/tabelog_search.js`.
+Use the returned absolute path in all subsequent `node <tabelog_search.js path>` commands instead of the relative `scripts/tabelog_search.js`.
 
 ---
 
@@ -28,7 +28,7 @@ Tabelog uses autocomplete to resolve area and keyword input into internal IDs. Y
 ## Step 1 — Run Mode 1: Get Suggestions
 
 ```bash
-node <path> \
+node <tabelog_search.js path> \
   --mode suggest \
   --area "大阪" \
   --keyword "焼肉"   # omit if user didn't specify a cuisine/keyword, or if the intent is vegetarian (use --vegetarian filter in Step 3 instead)
@@ -60,7 +60,7 @@ Returns JSON:
 ## Step 3 — Run Mode 2: Full Search
 
 ```bash
-node <path> \
+node <tabelog_search.js path> \
   --mode search \
   --area "大阪市" \
   --keyword "焼肉・ホルモン" \   # omit if no keyword

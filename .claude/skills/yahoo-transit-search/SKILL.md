@@ -12,7 +12,7 @@ Search transit routes using `scripts/yahoo_transit_search.js`. The script handle
 
 Before running any commands, use the **find-skill-script** skill to resolve the absolute path of `yahoo_transit_search.js` under the `scripts/` subdirectory.
 
-Use the returned absolute path in all subsequent `node <path>` commands instead of the relative `scripts/yahoo_transit_search.js`.
+Use the returned absolute path in all subsequent `node <yahoo_transit_search.js path>` commands instead of the relative `scripts/yahoo_transit_search.js`.
 
 ---
 
@@ -29,7 +29,7 @@ Use the returned absolute path in all subsequent `node <path>` commands instead 
 Always run suggest first for both `--from` and `--to` inputs, regardless of whether the input is a station name, landmark, or address.
 
 ```bash
-node <path> \
+node <yahoo_transit_search.js path> \
   --mode suggest \
   --station "新宿"
 ```
@@ -54,7 +54,7 @@ Returns JSON array:
 ## Step 2 — Run Mode 2: Search Routes
 
 ```bash
-node <path> \
+node <yahoo_transit_search.js path> \
   --mode search \
   --from "新宿" \
   --to "渋谷" \
@@ -102,7 +102,7 @@ Present the route summaries to the user and ask which route they want details fo
 After the user selects a route, read the full stop-by-stop detail from the cached file. **No HTTP request is made.**
 
 ```bash
-node <path> \
+node <yahoo_transit_search.js path> \
   --mode detail \
   --id a3f9c2 \               # required: uniqueId from search result
   --route 1                   # required: route number from search results
