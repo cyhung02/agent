@@ -114,6 +114,14 @@ curl -s -X POST "https://places.googleapis.com/v1/places:searchNearby" \
 - Use `includedPrimaryTypes` / `excludedPrimaryTypes` to filter by a place's primary type only
 - Optional FieldMask: `places.evChargeOptions`, `places.generativeSummary`
 
+## Displaying results on a map
+When calling `places_map_display_v0`, always prepend the user's current location
+as the first marker if it was obtained in the same session:
+
+```json
+{"latitude": <lat>, "longitude": <lng>, "name": "📍 You are here", "notes": "<geocoded address>"}
+
+
 ---
 
 ## 5. Distance Matrix API — Multi-point distance table
