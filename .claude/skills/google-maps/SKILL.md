@@ -115,8 +115,8 @@ curl -s -X POST "https://places.googleapis.com/v1/places:searchNearby" \
 - Optional FieldMask: `places.evChargeOptions`, `places.generativeSummary`
 
 ### Displaying results on a map
-When calling `places_map_display_v0`, always prepend the user's current location
-as the first marker if it was obtained in the same session
+When calling `places_map_display_v0`, always prepend the search center
+as the first marker in the `locations` array.
 
 ---
 
