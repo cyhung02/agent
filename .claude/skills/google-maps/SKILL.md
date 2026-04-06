@@ -1,16 +1,11 @@
------
-
-## name: google-maps
+---
+name: google-maps
 description: >
 Google Maps Platform skill for routing, geocoding, place search, place details, and photos.
-Use when the user asks about: walking distance, travel time, directions between
-two places, how long to walk/drive, address to coordinates, place details,
-searching for restaurants or facilities nearby, finding places by text, or showing place photos.
-Make sure to use this skill whenever the user asks anything related to maps, routes, places, or
-location-based queries — even if they don’t explicitly mention “Google Maps”.
-Triggers: 步行距離、步行時間、走路幾分鐘、開車幾分鐘、從A到B怎麼走、地址座標、
-附近多遠、路線規劃、附近餐廳、附近便利商店、周邊設施、地點搜尋、地點照片、
-walking distance, travel time, directions, route, nearby, search places, place photo.
+Use when the user asks about: walking distance, travel time, directions between two places, how long to walk/drive, address to coordinates, place details, searching for restaurants or facilities nearby, finding places by text, or showing place photos.
+Make sure to use this skill whenever the user asks anything related to maps, routes, places, or location-based queries — even if they don’t explicitly mention “Google Maps”.
+Triggers: 步行距離、步行時間、走路幾分鐘、開車幾分鐘、從A到B怎麼走、地址座標、附近多遠、路線規劃、附近餐廳、附近便利商店、周邊設施、地點搜尋、地點照片、walking distance, travel time, directions, route, nearby, search places, place photo.
+---
 
 # Google Maps Skill
 
