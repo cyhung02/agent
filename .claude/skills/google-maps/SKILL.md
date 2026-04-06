@@ -104,7 +104,7 @@ Use when the user wants a specific facility type within an exact radius ("飯店
 ```bash
 curl -s -X POST "https://places.googleapis.com/v1/places:searchNearby" \
   -H "X-Goog-Api-Key: $GMAPS_API_KEY" \
-  -H "X-Goog-FieldMask: places.displayName,places.formattedAddress,places.rating,places.location" \
+  -H "X-Goog-FieldMask: places.id,places.displayName,places.formattedAddress,places.rating,places.location" \
   -H "Content-Type: application/json" \
   -d '{"includedTypes": ["<type>"], "maxResultCount": 5, "locationRestriction": {"circle": {"center": {"latitude": <lat>, "longitude": <lng>}, "radius": <meters>}}}'
 ```
