@@ -25,7 +25,7 @@ curl -s "https://open.er-api.com/v6/latest/TWD"
 Returns `rates` as `1 TWD = X foreign`. Apply MC correction before showing:
 
 ```python
-MC_CORRECTION = 1.00305  # MC charges ~0.305% above ECB (verified 2026-04-04)
+MC_CORRECTION = 1.00305  # MC charges ~0.305% above ECB
 
 # TWD → foreign
 foreign = twd_amount * rates[FOREIGN] / MC_CORRECTION
