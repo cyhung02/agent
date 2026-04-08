@@ -11,25 +11,20 @@ description: >
 
 # Currency Converter Skill
 
-Use the **find-skill-script** skill to resolve the absolute paths of both
-`fetch_mc_rates.py` and `fetch_jcb_rates.py` under the `scripts/` subdirectory.
+Use the **find-skill-script** skill to resolve the absolute path of
+`currency_convert.py` under the `scripts/` subdirectory.
 
-Run both scripts with `<amount> <from_currency> <to_currency>`:
-
+Run:
 ```bash
-python /path/to/fetch_mc_rates.py <amount> <from> <to>
-python /path/to/fetch_jcb_rates.py <amount> <from> <to>
+python <currency_convert.py path> <amount> <from_currency> <to_currency>
 ```
 
-Each script outputs only the result, e.g. `247 TWD`.
-
-Present both results to the user in this format (plain text, no markdown):
-
+Display the script output as-is. Example output:
 ```
-💱 1,230 JPY → TWD
+💱 523 JPY → TWD
 
-Mastercard   247 TWD
-JCB          246 TWD
+105 TWD   Mastercard
+105 TWD   JCB
 ```
 
-Note: `fetch_jcb_rates.py` requires `pymupdf` (`pip install pymupdf`).
+Requires `pymupdf` (`pip install pymupdf`).

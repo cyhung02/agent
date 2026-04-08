@@ -1,19 +1,37 @@
+import json
 import re
 import sys
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
+
 import pymupdf  # pip install pymupdf
+
+MC_CORRECTION = 1.00305  # MC charges ~0.305% above ECB
 
 
 def fmt(value):
     return f"{value:,.0f}" if value >= 10 else f"{value:,.2f}"
 
 
-def fetch_jcb_rates() -> tuple[str, dict[str, float]]:
-    """Fetch latest JCB exchange rates from the official PDF.
+def fetch_mc(amount, from_cur, to_cur):
+    req = urllib.request.Request(
+        'https://open.er-api.com/v6/latest/TWD',
+        headers={'User-Agent': 'Mozilla/5.0'}
+    )
+    data = json.loads(urllib.request.urlopen(req).read())
+    rates = {c: r / MC_CORRECTION for c, r in data['rates'].items()}
 
-    Returns (date_str, rates) where rates[currency] = TWD per 1 unit of foreign.
-    e.g. rates['JPY'] = 0.2007 means 1 JPY = 0.2007 TWD
-    """
+    if from_cur == 'TWD':
+        result = amount * rates[to_cur]
+    elif to_cur == 'TWD':
+        result = amount / rates[from_cur]
+    else:
+        result = amount / rates[from_cur] * rates[to_cur]
+
+    return fmt(result)
+
+
+def fetch_jcb(amount, from_cur, to_cur):
     req = urllib.request.Request(
         'https://www.specialoffers.jcb/zh-tw/services/other/rate/',
         headers={'User-Agent': 'Mozilla/5.0'}
@@ -29,17 +47,11 @@ def fetch_jcb_rates() -> tuple[str, dict[str, float]]:
     text = ''.join(page.get_text() for page in doc)
     lines = [l.strip() for l in text.strip().split('\n') if l.strip()]
 
-    # Read currency order from header
     header_start = next(i for i, l in enumerate(lines) if l == 'JCB Exchange Rate')
     currencies, j = [], header_start + 1
     while j < len(lines) and re.match(r'^[A-Z]{3}$', lines[j]):
         currencies.append(lines[j])
         j += 1
-
-    # Find latest day with a full set of rates
-    # Also extract the month/year from the PDF title for date construction
-    date_str = ''
-    month_match = re.search(r'(\d{4})年(\d{1,2})月', text)
 
     latest_day, latest_rates = None, None
     for i, line in enumerate(lines):
@@ -55,23 +67,7 @@ def fetch_jcb_rates() -> tuple[str, dict[str, float]]:
             if len(values) == len(currencies):
                 latest_day, latest_rates = int(m.group(1)), values
 
-    if month_match and latest_day:
-        date_str = f"{month_match.group(1)}-{int(month_match.group(2)):02d}-{latest_day:02d}"
-
-    return date_str, dict(zip(currencies, latest_rates))
-
-
-def main():
-    if len(sys.argv) != 4:
-        print("Usage: fetch_jcb_rates.py <amount> <from_currency> <to_currency>")
-        print("Example: fetch_jcb_rates.py 3000 JPY TWD")
-        sys.exit(1)
-
-    amount = float(sys.argv[1])
-    from_cur = sys.argv[2].upper()
-    to_cur = sys.argv[3].upper()
-
-    date, rates = fetch_jcb_rates()
+    rates = dict(zip(currencies, latest_rates))
 
     if from_cur == 'TWD':
         result = amount / rates[to_cur]
@@ -80,7 +76,33 @@ def main():
     else:
         result = amount * rates[from_cur] / rates[to_cur]
 
-    print(f"{fmt(result)} {to_cur}")
+    return fmt(result)
+
+
+def main():
+    if len(sys.argv) != 4:
+        print("Usage: currency_convert.py <amount> <from_currency> <to_currency>")
+        print("Example: currency_convert.py 523 JPY TWD")
+        sys.exit(1)
+
+    amount = float(sys.argv[1])
+    from_cur = sys.argv[2].upper()
+    to_cur = sys.argv[3].upper()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        mc_future = executor.submit(fetch_mc, amount, from_cur, to_cur)
+        jcb_future = executor.submit(fetch_jcb, amount, from_cur, to_cur)
+        mc_result = mc_future.result()
+        jcb_result = jcb_future.result()
+
+    mc_line = f"{mc_result} {to_cur}"
+    jcb_line = f"{jcb_result} {to_cur}"
+    width = max(len(mc_line), len(jcb_line))
+
+    print(f"💱 {fmt(amount)} {from_cur} → {to_cur}")
+    print()
+    print(f"{mc_line:<{width}}   Mastercard")
+    print(f"{jcb_line:<{width}}   JCB")
 
 
 if __name__ == '__main__':
