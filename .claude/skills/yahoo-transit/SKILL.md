@@ -16,7 +16,7 @@ If the user's departure or arrival point is their current location (e.g. "今い
 user_location_v0(accuracy="precise")
 ```
 
-Use the returned `latitude` and `longitude` to look up the nearest station via WebSearch (e.g. `"<lat>,<lng> 最寄り駅"`), then proceed with that station name in Step 1.
+Use the returned `latitude` and `longitude` to look up the nearest transit station via the **google-maps** skill (Places Nearby Search with `includedTypes: ["transit_station", "subway_station", "bus_station"]`), then proceed with that station name in Step 1.
 
 ---
 
