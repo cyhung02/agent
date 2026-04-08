@@ -10,9 +10,9 @@
 //       --from "新宿" --to "渋谷" \
 //       [--from-code 22741] [--to-code 22715] \
 //       [--date YYYY-MM-DD] [--time HH:MM] \
-//       [--type dep|arr|first|last] \
-//       [--n 3]
-//     → Outputs route summaries + uniqueId. Full route data (with stops) is saved to
+//       [--type dep|arr|first|last]
+//     → Fetches up to 5 routes (spanning multiple Yahoo pages automatically).
+//       Outputs route summaries + uniqueId. Full route data (with stops) is saved to
 //       /tmp/yahoo_transit_{uniqueId}.json for use by detail mode.
 //
 //   Mode 3 - Route detail (full stops for one route):
@@ -40,7 +40,6 @@ const toCode    = get('--to-code') || '';
 const dateStr   = get('--date') || '';
 const timeStr   = get('--time') || '';
 const typeArg   = get('--type') || 'dep';
-const n         = parseInt(get('--n') || '3', 10);
 const routeNum  = parseInt(get('--route') || '1', 10);
 const idArg     = get('--id') || '';
 
@@ -314,8 +313,10 @@ function stopsToFlow(stops) {
   return flow.filter(Boolean);
 }
 
-// --- Build search URL from current args ---
-function buildSearchUrl() {
+// --- Build search URL for a given page (1-based) ---
+// Yahoo Transit returns 3 routes per page. Page 1 has no fl/tl params;
+// page N (N≥2) uses fl=(N-1)*3+1 & tl=N*3 to load the next batch.
+function buildSearchUrl(page) {
   const now = new Date();
   // Use Asia/Tokyo timezone (JST = UTC+9) to match Yahoo Transit's locale.
   // This ensures "now" reflects Japan local time even when the host is UTC.
@@ -367,13 +368,18 @@ function buildSearchUrl() {
     sr: '1',
   });
 
+  if (page >= 2) {
+    params.set('fl', String((page - 1) * 3 + 1));
+    params.set('tl', String(page * 3));
+  }
+
   return `https://transit.yahoo.co.jp/search/result?${params}`;
 }
 
-// --- Fetch HTML ---
-function fetchHtml() {
+// --- Fetch HTML for a given page ---
+function fetchHtml(page) {
   if (!from || !to) { console.error('Error: --from and --to are required'); process.exit(1); }
-  const url = buildSearchUrl();
+  const url = buildSearchUrl(page);
   try { return curlGet(url); } catch (e) {
     console.error('Error fetching search results:', e.message); process.exit(1);
   }
@@ -413,21 +419,33 @@ function parseRouteSummary(block, idx) {
   return { route: num, priority: priorities, departure: depTime, arrival: arrTime, duration, transfers, fare, distance };
 }
 
-// --- Mode 2: search — returns route summaries with flow, saves full data to cache ---
-function modeSearch() {
-  const html = fetchHtml();
-  const routeBlocks = html.split(/<div id="route\d+">/);
+const TARGET_ROUTES = 5;
 
-  // Parse ALL available routes with full stops for cache
-  const allRoutes = [];
+// --- Parse route blocks from an HTML page ---
+function parsePageRoutes(html) {
+  const routeBlocks = html.split(/<div id="route\d+">/);
+  const routes = [];
   for (let i = 1; i < routeBlocks.length; i++) {
     const block = routeBlocks[i];
     const summary = parseRouteSummary(block, i);
     const detailM = block.match(/<div class="routeDetail">([\s\S]*?)<\/div><\/div><\/div>/);
-    const stops = detailM ? parseRouteDetail(detailM[1]) : [];
-    summary.flow = stopsToFlow(stops);
-    summary.stops = stops;
-    allRoutes.push(summary);
+    summary.stops = detailM ? parseRouteDetail(detailM[1]) : [];
+    summary.flow = stopsToFlow(summary.stops);
+    routes.push(summary);
+  }
+  return routes;
+}
+
+// --- Mode 2: search — fetches up to TARGET_ROUTES routes across pages, saves to cache ---
+function modeSearch() {
+  const allRoutes = [];
+
+  for (let page = 1; allRoutes.length < TARGET_ROUTES; page++) {
+    const html = fetchHtml(page);
+    const pageRoutes = parsePageRoutes(html);
+    if (pageRoutes.length === 0) break;
+    allRoutes.push(...pageRoutes);
+    if (!html.includes('次の3件')) break;
   }
 
   // Save full data to cache file
@@ -435,8 +453,8 @@ function modeSearch() {
   const cacheFile = `${CACHE_DIR}/yahoo_transit_${uniqueId}.json`;
   fs.writeFileSync(cacheFile, JSON.stringify({ uniqueId, from, fromCode, to, toCode, routes: allRoutes }, null, 2));
 
-  // Output summaries (without stops) for the requested n routes, plus uniqueId
-  const summaries = allRoutes.slice(0, n).map(({ stops: _, ...r }) => r);
+  // Output summaries (without stops) for up to TARGET_ROUTES routes
+  const summaries = allRoutes.slice(0, TARGET_ROUTES).map(({ stops: _, ...r }) => r);
   console.log(JSON.stringify({ uniqueId, routes: summaries }, null, 2));
 }
 

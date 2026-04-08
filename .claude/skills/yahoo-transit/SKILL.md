@@ -77,10 +77,9 @@ node <yahoo-transit.js path> \
   [--date YYYY-MM-DD]          # default: today (Japan time, JST = UTC+9)
   [--time HH:MM]               # default: now (Japan time, JST = UTC+9)
   [--type dep|arr|first|last]  # dep=出発(default), arr=到着, first=始発, last=終電
-  [--n 3]                      # number of routes to return (default: 3)
 ```
 
-Returns a `uniqueId` plus a list of route summaries, each with a compact `flow`:
+Returns a `uniqueId` plus up to 5 route summaries, each with a compact `flow`:
 ```json
 {
   "uniqueId": "a3f9c2",
