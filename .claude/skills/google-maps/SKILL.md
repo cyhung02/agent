@@ -47,7 +47,8 @@ curl -s "https://maps.googleapis.com/maps/api/directions/json?origin=<lat>,<lng>
 ```
 
 - `mode`: `walking` | `driving` | `transit` | `bicycling`
-- Key fields: `routes[0].legs[0].distance.value` (meters), `routes[0].legs[0].duration.value` (seconds)
+- **When `mode=transit`, always append `&alternatives=true`** to get multiple route options (Google's "best" route is not always fastest — other options may be better). Iterate over all `routes[]` and present each one to the user.
+- Key fields: `routes[n].legs[0].distance.value` (meters), `routes[n].legs[0].duration.value` (seconds)
 
 -----
 
