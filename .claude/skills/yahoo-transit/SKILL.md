@@ -12,8 +12,8 @@ Search transit routes using `scripts/yahoo_transit_search.js`. The script handle
 
 If the user's departure or arrival point is their current location (e.g. "今いる場所から", "現在地から"), call `user_location_v0` with `accuracy` set to `precise` before any other step:
 
-```json
-{"accuracy": "precise"}
+```
+user_location_v0(accuracy="precise")
 ```
 
 Use the returned `latitude` and `longitude` to look up the nearest station via WebSearch (e.g. `"<lat>,<lng> 最寄り駅"`), then proceed with that station name in Step 1.

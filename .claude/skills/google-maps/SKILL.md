@@ -15,8 +15,8 @@ Read from env or user preferences: `GMAPS_API_KEY`
 
 When the user's current location is needed (e.g. "附近", "我現在在哪", "從我這裡出發"), call `user_location_v0` with `accuracy` set to `precise`:
 
-```json
-{"accuracy": "precise"}
+```
+user_location_v0(accuracy="precise")
 ```
 
 Use the returned `latitude` and `longitude` as the origin or search center for subsequent API calls.
