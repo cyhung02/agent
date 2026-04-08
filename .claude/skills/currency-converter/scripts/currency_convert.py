@@ -108,14 +108,14 @@ def main():
         rows.append((f"{jcb_result} {to_cur}", "JCB"))
 
     if not rows:
-        print(f"不支援的幣別：{from_cur} 或 {to_cur}")
+        print(f"{from_cur} or {to_cur} is not supported.")
         sys.exit(1)
 
     width = max(len(r[0]) for r in rows)
-    print(f"💱 {fmt(amount)} {from_cur} → {to_cur}")
+    print(f"{fmt(amount)} {from_cur} → {to_cur}")
     print()
     for amount_str, org in rows:
-        print(f"{amount_str:<{width}}|{org}")
+        print(f"{amount_str:<{width}} | {org}")
 
 
 if __name__ == '__main__':
