@@ -11,14 +11,15 @@
 //       [--from-code 22741] [--to-code 22715] \
 //       [--date YYYY-MM-DD] [--time HH:MM] \
 //       [--type dep|arr|first|last] \
-//       [--n 3]
+//       [--n 3] \
+//       [--page 1]              # page of results: 1=routes 1-3 (default), 2=routes 4-6, 3=routes 7-9, ...
 //     → Outputs route summaries + uniqueId. Full route data (with stops) is saved to
 //       /tmp/yahoo_transit_{uniqueId}.json for use by detail mode.
 //
 //   Mode 3 - Route detail (full stops for one route):
 //     node yahoo-transit.js --mode detail \
 //       --id {uniqueId} \
-//       --route 1
+//       --route 1               # use the actual route number shown in search results (e.g. 4 for page 2 route 1)
 //     → Reads cached data from search. No HTTP request is made.
 
 const { execFileSync } = require('child_process');
@@ -41,6 +42,7 @@ const dateStr   = get('--date') || '';
 const timeStr   = get('--time') || '';
 const typeArg   = get('--type') || 'dep';
 const n         = parseInt(get('--n') || '3', 10);
+const pageNum   = parseInt(get('--page') || '1', 10);
 const routeNum  = parseInt(get('--route') || '1', 10);
 const idArg     = get('--id') || '';
 
@@ -366,6 +368,12 @@ function buildSearchUrl() {
     lb: '1',
     sr: '1',
   });
+
+  // Pagination: page 1 = first 3 results (no fl/tl), page N = routes (N-1)*3+1 to N*3
+  if (pageNum >= 2) {
+    params.set('fl', String((pageNum - 1) * 3 + 1));
+    params.set('tl', String(pageNum * 3));
+  }
 
   return `https://transit.yahoo.co.jp/search/result?${params}`;
 }

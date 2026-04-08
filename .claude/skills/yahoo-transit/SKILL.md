@@ -78,7 +78,17 @@ node <yahoo-transit.js path> \
   [--time HH:MM]               # default: now (Japan time, JST = UTC+9)
   [--type dep|arr|first|last]  # dep=出発(default), arr=到着, first=始発, last=終電
   [--n 3]                      # number of routes to return (default: 3)
+  [--page 1]                   # page of results: 1=routes 1-3 (default), 2=routes 4-6, 3=routes 7-9, ...
 ```
+
+**Pagination ("次の3件"):**
+
+Yahoo Transit returns 3 routes per page. Use `--page N` to fetch subsequent pages:
+- `--page 1` → routes 1–3 (default, no extra URL params)
+- `--page 2` → routes 4–6 (adds `fl=4&tl=6` to URL)
+- `--page 3` → routes 7–9 (adds `fl=7&tl=9`), and so on
+
+Each page returns a **new `uniqueId`**. Use that `uniqueId` with the route numbers shown (e.g. route `4`, `5`, `6` for page 2) in the detail step.
 
 Returns a `uniqueId` plus a list of route summaries, each with a compact `flow`:
 ```json
