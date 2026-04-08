@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-// yahoo_transit_search.js - Yahoo Transit route search script (no browser required)
+// yahoo-transit.js - Yahoo Transit route search script (no browser required)
 //
 // Usage:
 //   Mode 1 - Get station suggestions:
-//     node yahoo_transit_search.js --mode suggest --station "新宿"
+//     node yahoo-transit.js --mode suggest --station "新宿"
 //
 //   Mode 2 - Search routes (summary + flow):
-//     node yahoo_transit_search.js --mode search \
+//     node yahoo-transit.js --mode search \
 //       --from "新宿" --to "渋谷" \
 //       [--from-code 22741] [--to-code 22715] \
 //       [--date YYYY-MM-DD] [--time HH:MM] \
@@ -16,7 +16,7 @@
 //       /tmp/yahoo_transit_{uniqueId}.json for use by detail mode.
 //
 //   Mode 3 - Route detail (full stops for one route):
-//     node yahoo_transit_search.js --mode detail \
+//     node yahoo-transit.js --mode detail \
 //       --id {uniqueId} \
 //       --route 1
 //     → Reads cached data from search. No HTTP request is made.

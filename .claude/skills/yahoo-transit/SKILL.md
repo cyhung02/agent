@@ -6,7 +6,7 @@ allowed-tools: Bash, WebSearch
 
 # Yahoo 乗換案内 Skill
 
-Search transit routes using `scripts/yahoo_transit_search.js`. The script handles all HTTP requests internally — no browser needed.
+Search transit routes using `scripts/yahoo-transit.js`. The script handles all HTTP requests internally — no browser needed.
 
 ## Step 0a — Get User's Current Location (if needed)
 
@@ -22,9 +22,9 @@ Use the returned `latitude` and `longitude` to get a street address via the **go
 
 ## Step 0 — Locate the Script
 
-Before running any commands, use the **find-skill-script** skill to resolve the absolute path of `yahoo_transit_search.js` under the `scripts/` subdirectory.
+Before running any commands, use the **find-skill-script** skill to resolve the absolute path of `yahoo-transit.js` under the `scripts/` subdirectory.
 
-Use the returned absolute path in all subsequent `node <yahoo_transit_search.js path>` commands instead of the relative `scripts/yahoo_transit_search.js`.
+Use the returned absolute path in all subsequent `node <yahoo-transit.js path>` commands instead of the relative `scripts/yahoo-transit.js`.
 
 ---
 
@@ -41,7 +41,7 @@ Use the returned absolute path in all subsequent `node <yahoo_transit_search.js 
 Always run suggest first for both `--from` and `--to` inputs, regardless of whether the input is a station name, landmark, or address.
 
 ```bash
-node <yahoo_transit_search.js path> \
+node <yahoo-transit.js path> \
   --mode suggest \
   --station "新宿"
 ```
@@ -57,10 +57,9 @@ Returns JSON array:
 
 **Decision rules:**
 - **Non-empty results** → pick the best match. Always use the `name` from the suggest result as `--from` / `--to` (not the original user input). If it has a `code`, also pass `--from-code` / `--to-code` to avoid disambiguation.
-- **Empty array `[]`** → suggest does not recognise the input (e.g. a hotel name or landmark). Use WebSearch to find the Japanese address for the input (e.g. search `"<input> 住所"`), then:
-  1. Run suggest again with the address string found.
-  2. If suggest still returns `[]`, skip to Step 2 and pass the address directly as `--from` / `--to`.
-  3. If WebSearch also fails to find an address, skip to Step 2 and pass the original input directly.
+- **Empty array `[]`** → suggest does not recognise the input (e.g. a hotel name or landmark). Use the **google-maps** skill (Place Search) to find the correct Japanese name for the input, then:
+  1. Run suggest again with the Japanese name found from google-maps.
+  2. If suggest still returns `[]`, use the **google-maps** skill (Geocoding) to get the full Japanese address for the input, then skip to Step 2 and pass that address directly as `--from` / `--to`.
 
 > Suggest results include both transit stops (with a numeric `code`) and landmarks/POI (with `code: ""`). Transit stops can be used with `--from-code` / `--to-code` for precise disambiguation. Landmarks with no code can be passed directly as `--from` / `--to` — Yahoo Transit will geocode them automatically.
 
@@ -69,7 +68,7 @@ Returns JSON array:
 ## Step 2 — Run Mode 2: Search Routes
 
 ```bash
-node <yahoo_transit_search.js path> \
+node <yahoo-transit.js path> \
   --mode search \
   --from "新宿" \
   --to "渋谷" \
@@ -117,7 +116,7 @@ Present the route summaries to the user and ask which route they want details fo
 After the user selects a route, read the full stop-by-stop detail from the cached file. **No HTTP request is made.**
 
 ```bash
-node <yahoo_transit_search.js path> \
+node <yahoo-transit.js path> \
   --mode detail \
   --id a3f9c2 \               # required: uniqueId from search result
   --route 1                   # required: route number from search results
