@@ -19,12 +19,6 @@ Run:
 python <currency_convert.py path> <amount> <from_currency> <to_currency>
 ```
 
-Display the script output as-is. Example output:
-```
-💱 523 JPY → TWD
-
-105 TWD   Mastercard
-105 TWD   JCB
-```
+Display the script output as-is.
 
 Requires `pymupdf` (`pip install pymupdf`).
