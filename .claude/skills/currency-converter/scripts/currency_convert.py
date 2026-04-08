@@ -21,12 +21,15 @@ def fetch_mc(amount, from_cur, to_cur):
     data = json.loads(urllib.request.urlopen(req).read())
     rates = {c: r / MC_CORRECTION for c, r in data['rates'].items()}
 
-    if from_cur == 'TWD':
-        result = amount * rates[to_cur]
-    elif to_cur == 'TWD':
-        result = amount / rates[from_cur]
-    else:
-        result = amount / rates[from_cur] * rates[to_cur]
+    try:
+        if from_cur == 'TWD':
+            result = amount * rates[to_cur]
+        elif to_cur == 'TWD':
+            result = amount / rates[from_cur]
+        else:
+            result = amount / rates[from_cur] * rates[to_cur]
+    except KeyError:
+        return None
 
     return fmt(result)
 
@@ -69,12 +72,15 @@ def fetch_jcb(amount, from_cur, to_cur):
 
     rates = dict(zip(currencies, latest_rates))
 
-    if from_cur == 'TWD':
-        result = amount / rates[to_cur]
-    elif to_cur == 'TWD':
-        result = amount * rates[from_cur]
-    else:
-        result = amount * rates[from_cur] / rates[to_cur]
+    try:
+        if from_cur == 'TWD':
+            result = amount / rates[to_cur]
+        elif to_cur == 'TWD':
+            result = amount * rates[from_cur]
+        else:
+            result = amount * rates[from_cur] / rates[to_cur]
+    except KeyError:
+        return None
 
     return fmt(result)
 
@@ -95,14 +101,21 @@ def main():
         mc_result = mc_future.result()
         jcb_result = jcb_future.result()
 
-    mc_line = f"{mc_result} {to_cur}"
-    jcb_line = f"{jcb_result} {to_cur}"
-    width = max(len(mc_line), len(jcb_line))
+    rows = []
+    if mc_result is not None:
+        rows.append((f"{mc_result} {to_cur}", "Mastercard"))
+    if jcb_result is not None:
+        rows.append((f"{jcb_result} {to_cur}", "JCB"))
 
+    if not rows:
+        print(f"不支援的幣別：{from_cur} 或 {to_cur}")
+        sys.exit(1)
+
+    width = max(len(r[0]) for r in rows)
     print(f"💱 {fmt(amount)} {from_cur} → {to_cur}")
     print()
-    print(f"{mc_line:<{width}}|Mastercard")
-    print(f"{jcb_line:<{width}}|JCB")
+    for amount_str, org in rows:
+        print(f"{amount_str:<{width}}|{org}")
 
 
 if __name__ == '__main__':
