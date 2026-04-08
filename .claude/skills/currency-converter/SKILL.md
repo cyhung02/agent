@@ -17,21 +17,20 @@ Two modes: **Mastercard** (default) and **JCB**.
 
 ## Mode 1: Mastercard rates (open.er-api + correction)
 
-Fetch:
-```bash
-curl -s "https://open.er-api.com/v6/latest/TWD"
-```
+First, use the **find-skill-script** skill to resolve the absolute path of `fetch_mc_rates.py` under the `scripts/` subdirectory.
 
-Returns `rates` as `1 TWD = X foreign`. Apply MC correction before showing:
+Run `python <fetch_mc_rates.py path>` to get a result dict:
 
 ```python
-MC_CORRECTION = 1.00305  # MC charges ~0.305% above ECB
+result = fetch_mc_rates()
+# result['date'] = '2026-04-04'
+# result['rates']['JPY'] = 4.97  means: 1 TWD ≈ 4.97 JPY (MC-corrected)
 
 # TWD → foreign
-foreign = twd_amount * rates[FOREIGN] / MC_CORRECTION
+foreign = twd_amount * result['rates'][FOREIGN]
 
 # Foreign → TWD
-twd = foreign_amount / rates[FOREIGN] * MC_CORRECTION
+twd = foreign_amount / result['rates'][FOREIGN]
 ```
 
 Output:
