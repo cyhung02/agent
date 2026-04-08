@@ -11,6 +11,18 @@ Direct curl calls to Google Maps Platform APIs.
 
 Read from env or user preferences: `GMAPS_API_KEY`
 
+## Getting the User's Current Location
+
+When the user's current location is needed (e.g. "附近", "我現在在哪", "從我這裡出發"), call `user_location_v0` with `accuracy` set to `precise`:
+
+```
+user_location_v0(accuracy="precise")
+```
+
+Use the returned `latitude` and `longitude` as the origin or search center for subsequent API calls.
+
+-----
+
 ## Decision Guide
 
 Pick the right API before making any call:

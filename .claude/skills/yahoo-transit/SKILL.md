@@ -8,6 +8,18 @@ allowed-tools: Bash, WebSearch
 
 Search transit routes using `scripts/yahoo_transit_search.js`. The script handles all HTTP requests internally — no browser needed.
 
+## Step 0a — Get User's Current Location (if needed)
+
+If the user's departure or arrival point is their current location (e.g. "今いる場所から", "現在地から"), call `user_location_v0` with `accuracy` set to `precise` before any other step:
+
+```
+user_location_v0(accuracy="precise")
+```
+
+Use the returned `latitude` and `longitude` to get a street address via the **google-maps** skill (Reverse Geocoding API), then pass that address as `--from` / `--to` in Step 1. Yahoo Transit will resolve it to the nearest station automatically.
+
+---
+
 ## Step 0 — Locate the Script
 
 Before running any commands, use the **find-skill-script** skill to resolve the absolute path of `yahoo_transit_search.js` under the `scripts/` subdirectory.
