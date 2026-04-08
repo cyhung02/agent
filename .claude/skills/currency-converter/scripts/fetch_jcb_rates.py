@@ -85,11 +85,6 @@ def main():
         cross = rates[from_cur] / rates[to_cur]
         rate_str = f"1 {from_cur} ≈ {fmt(cross)} {to_cur}"
 
-    date_label = f"，{date}" if date else ""
-    print(f"💱 匯率（JCB 官方{date_label}）")
-    print()
-    print(rate_str)
-    print()
     print(f"{fmt(amount)} {from_cur} ≈ {fmt(result)} {to_cur}")
 
 

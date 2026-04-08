@@ -11,60 +11,23 @@ description: >
 
 # Currency Converter Skill
 
-Two modes: **Mastercard** (default) and **JCB**.
+Use the **find-skill-script** skill to resolve the absolute paths of both
+`fetch_mc_rates.py` and `fetch_jcb_rates.py` under the `scripts/` subdirectory.
 
----
+Run both scripts with `<amount> <from_currency> <to_currency>`:
 
-## Mode 1: Mastercard rates (open.er-api + correction)
-
-First, use the **find-skill-script** skill to resolve the absolute path of `fetch_mc_rates.py` under the `scripts/` subdirectory.
-
-Run:
 ```bash
-python <fetch_mc_rates.py path> <amount> <from_currency> <to_currency>
+python /path/to/fetch_mc_rates.py <amount> <from> <to>
+python /path/to/fetch_jcb_rates.py <amount> <from> <to>
 ```
 
-Example:
-```bash
-python /path/to/fetch_mc_rates.py 1000 TWD JPY
+Each script outputs a single conversion line, e.g. `1,230 JPY ≈ 247 TWD`.
+
+Present both results to the user in this format:
+
+```
+- Mastercard：1,230 JPY ≈ 247 TWD
+- JCB：1,230 JPY ≈ 246 TWD
 ```
 
-The script outputs the answer directly:
-```
-💱 匯率（2026-04-04，Mastercard 估算）
-
-1 TWD ≈ 4.97 JPY
-
-1,000 TWD ≈ 4,974 JPY
-（已套用 Mastercard +0.305% 修正）
-```
-
-Display the script output as-is.
-
----
-
-## Mode 2: JCB rates (official PDF)
-
-First, use the **find-skill-script** skill to resolve the absolute path of `fetch_jcb_rates.py` under the `scripts/` subdirectory.
-
-Run:
-```bash
-python <fetch_jcb_rates.py path> <amount> <from_currency> <to_currency>
-```
-
-Example:
-```bash
-python /path/to/fetch_jcb_rates.py 3000 JPY TWD
-```
-
-The script outputs the answer directly. Requires `pymupdf` (`pip install pymupdf`).
-
----
-
-## Trigger mapping
-
-| User says | Action |
-|-----------|--------|
-| "今天匯率" / 一般換算 | Mode 1 (Mastercard) |
-| "JCB 匯率" / "JCB 多少" | Mode 2 (JCB PDF) |
-| "JCB 還是 MC 划算" | Both modes, compare |
+Note: `fetch_jcb_rates.py` requires `pymupdf` (`pip install pymupdf`).

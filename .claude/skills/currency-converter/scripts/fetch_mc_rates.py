@@ -48,12 +48,7 @@ def main():
         cross = rates[to_cur] / rates[from_cur]
         rate_str = f"1 {from_cur} ≈ {fmt(cross)} {to_cur}"
 
-    print(f"💱 匯率（{date}，Mastercard 估算）")
-    print()
-    print(rate_str)
-    print()
     print(f"{fmt(amount)} {from_cur} ≈ {fmt(result)} {to_cur}")
-    print("（已套用 Mastercard +0.305% 修正）")
 
 
 if __name__ == '__main__':
