@@ -1,7 +1,7 @@
 ---
-name: yahoo-transit-search
+name: yahoo-transit
 description: Search train/bus routes on Yahoo Transit (transit.yahoo.co.jp). Use this skill whenever the user wants to find transit routes in Japan — searching by departure/arrival station, date/time, or direction type. Covers tasks like "新宿から渋谷まで行きたい", "東京から大阪 新幹線", "明日の朝9時に渋谷着くには", "終電を調べて", "乗換案内", "京都駅から金閣寺までバスで行きたい", "バスの乗り換え調べて". Also handles station disambiguation, bus stops, landmarks as destinations, and specifying arrival time vs departure time.
-allowed-tools: Bash
+allowed-tools: Bash, WebSearch
 ---
 
 # Yahoo 乗換案内 Skill
@@ -45,7 +45,10 @@ Returns JSON array:
 
 **Decision rules:**
 - **Non-empty results** → pick the best match. Always use the `name` from the suggest result as `--from` / `--to` (not the original user input). If it has a `code`, also pass `--from-code` / `--to-code` to avoid disambiguation.
-- **Empty array `[]`** → suggest does not recognise the input (e.g. a full address). Skip to Step 2 and pass the original input directly as `--from` / `--to`.
+- **Empty array `[]`** → suggest does not recognise the input (e.g. a hotel name or landmark). Use WebSearch to find the Japanese address for the input (e.g. search `"<input> 住所"`), then:
+  1. Run suggest again with the address string found.
+  2. If suggest still returns `[]`, skip to Step 2 and pass the address directly as `--from` / `--to`.
+  3. If WebSearch also fails to find an address, skip to Step 2 and pass the original input directly.
 
 > Suggest results include both transit stops (with a numeric `code`) and landmarks/POI (with `code: ""`). Transit stops can be used with `--from-code` / `--to-code` for precise disambiguation. Landmarks with no code can be passed directly as `--from` / `--to` — Yahoo Transit will geocode them automatically.
 
