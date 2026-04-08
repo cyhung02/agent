@@ -11,60 +11,20 @@ description: >
 
 # Currency Converter Skill
 
-Two modes: **Mastercard** (default) and **JCB**.
+Use the **find-skill-script** skill to resolve the absolute path of
+`currency_convert.py` under the `scripts/` subdirectory.
 
----
-
-## Mode 1: Mastercard rates (open.er-api + correction)
-
-Fetch:
+Run:
 ```bash
-curl -s "https://open.er-api.com/v6/latest/TWD"
+python <currency_convert.py path> <amount> <from_currency> <to_currency>
 ```
 
-Returns `rates` as `1 TWD = X foreign`. Apply MC correction before showing:
-
-```python
-MC_CORRECTION = 1.00305  # MC charges ~0.305% above ECB
-
-# TWD → foreign
-foreign = twd_amount * rates[FOREIGN] / MC_CORRECTION
-
-# Foreign → TWD
-twd = foreign_amount / rates[FOREIGN] * MC_CORRECTION
+Display the script output as-is. Example output:
 ```
+💱 523 JPY → TWD
 
-Output:
-```
-💱 匯率（2026-04-04，Mastercard 估算）
-
-1 TWD ≈ 4.97 JPY
-
-1,000 TWD ≈ 4,974 JPY
-（已套用 Mastercard +0.305% 修正）
-```
-
----
-
-## Mode 2: JCB rates (official PDF)
-
-First, use the **find-skill-script** skill to resolve the absolute path of `fetch_jcb_rates.py` under the `scripts/` subdirectory.
-
-Run `<fetch_jcb_rates.py path>` to get a rates dict:
-
-```python
-rates = fetch_jcb_rates()
-# rates['JPY'] = X means: 1 JPY = X TWD (opposite of open.er-api)
+105 TWD   Mastercard
+105 TWD   JCB
 ```
 
 Requires `pymupdf` (`pip install pymupdf`).
-
----
-
-## Trigger mapping
-
-| User says | Action |
-|-----------|--------|
-| "今天匯率" / 一般換算 | Mode 1 (Mastercard) |
-| "JCB 匯率" / "JCB 多少" | Mode 2 (JCB PDF) |
-| "JCB 還是 MC 划算" | Both modes, compare |
