@@ -1,7 +1,7 @@
 import re
 import sys
 import urllib.request
-import fitz  # pip install pymupdf
+import pymupdf  # pip install pymupdf
 
 
 def fmt(value):
@@ -25,7 +25,7 @@ def fetch_jcb_rates() -> tuple[str, dict[str, float]]:
     pdf_data = urllib.request.urlopen(
         urllib.request.Request(pdf_url, headers={'User-Agent': 'Mozilla/5.0'})
     ).read()
-    doc = fitz.open(stream=pdf_data, filetype='pdf')
+    doc = pymupdf.open(stream=pdf_data, filetype='pdf')
     text = ''.join(page.get_text() for page in doc)
     lines = [l.strip() for l in text.strip().split('\n') if l.strip()]
 
