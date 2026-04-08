@@ -75,17 +75,12 @@ def main():
 
     if from_cur == 'TWD':
         result = amount / rates[to_cur]
-        rate_str = f"1 TWD ≈ {fmt(1 / rates[to_cur])} {to_cur}"
     elif to_cur == 'TWD':
         result = amount * rates[from_cur]
-        rate_str = f"1 {from_cur} ≈ {fmt(rates[from_cur])} TWD"
     else:
-        # cross rate via TWD
         result = amount * rates[from_cur] / rates[to_cur]
-        cross = rates[from_cur] / rates[to_cur]
-        rate_str = f"1 {from_cur} ≈ {fmt(cross)} {to_cur}"
 
-    print(f"{fmt(amount)} {from_cur} ≈ {fmt(result)} {to_cur}")
+    print(f"{fmt(result)} {to_cur}")
 
 
 if __name__ == '__main__':

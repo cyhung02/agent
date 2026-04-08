@@ -21,13 +21,15 @@ python /path/to/fetch_mc_rates.py <amount> <from> <to>
 python /path/to/fetch_jcb_rates.py <amount> <from> <to>
 ```
 
-Each script outputs a single conversion line, e.g. `1,230 JPY ≈ 247 TWD`.
+Each script outputs only the result, e.g. `247 TWD`.
 
-Present both results to the user in this format:
+Present both results to the user in this format (plain text, no markdown):
 
 ```
-- Mastercard：1,230 JPY ≈ 247 TWD
-- JCB：1,230 JPY ≈ 246 TWD
+💱 1,230 JPY → TWD
+
+Mastercard   247 TWD
+JCB          246 TWD
 ```
 
 Note: `fetch_jcb_rates.py` requires `pymupdf` (`pip install pymupdf`).
