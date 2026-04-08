@@ -16,7 +16,7 @@ If the user's departure or arrival point is their current location (e.g. "今い
 user_location_v0(accuracy="precise")
 ```
 
-Use the returned `latitude` and `longitude` to get a street address via the **google-maps** skill (Reverse Geocoding API), then pass that address as `--from` / `--to` in Step 1. Yahoo Transit will resolve it to the nearest station automatically.
+Use the returned `latitude` and `longitude` to get a street address via the **google-maps** skill (Reverse Geocoding API), then pass that address as `--from` / `--to` in Step 1.
 
 ---
 
