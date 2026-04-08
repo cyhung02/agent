@@ -22,9 +22,9 @@ Use the returned `latitude` and `longitude` to get a street address via the **go
 
 ## Step 0 — Locate the Script
 
-Before running any commands, use the **find-skill-script** skill to resolve the absolute path of `yahoo_transit_search.js` under the `scripts/` subdirectory.
+The script path is `<base_directory>/scripts/yahoo_transit_search.js`, where `<base_directory>` is the **Base directory for this skill** shown at the top of this skill invocation.
 
-Use the returned absolute path in all subsequent `node <yahoo_transit_search.js path>` commands instead of the relative `scripts/yahoo_transit_search.js`.
+Use this absolute path in all subsequent `node` commands.
 
 ---
 
