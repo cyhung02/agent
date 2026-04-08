@@ -1,41 +1,55 @@
 import json
+import sys
 import urllib.request
 
 
 MC_CORRECTION = 1.00305  # MC charges ~0.305% above ECB
 
 
-def fetch_mc_rates() -> dict:
-    """Fetch Mastercard exchange rates from open.er-api.com with MC correction applied.
+def fmt(value):
+    return f"{value:,.0f}" if value >= 10 else f"{value:,.2f}"
 
-    Returns a dict with:
-      - 'date': rate date string (e.g. '2026-04-04')
-      - 'rates': dict where rates[currency] = units of foreign per 1 TWD (MC-corrected)
 
-    E.g. rates['JPY'] = 4.97 means 1 TWD ≈ 4.97 JPY after MC correction.
+def main():
+    if len(sys.argv) != 4:
+        print("Usage: fetch_mc_rates.py <amount> <from_currency> <to_currency>")
+        print("Example: fetch_mc_rates.py 1000 TWD JPY")
+        sys.exit(1)
 
-    Conversion formulas:
-      TWD → foreign: foreign = twd_amount * rates[currency]
-      Foreign → TWD: twd = foreign_amount / rates[currency]
-    """
+    amount = float(sys.argv[1])
+    from_cur = sys.argv[2].upper()
+    to_cur = sys.argv[3].upper()
+
     req = urllib.request.Request(
         'https://open.er-api.com/v6/latest/TWD',
         headers={'User-Agent': 'Mozilla/5.0'}
     )
     data = json.loads(urllib.request.urlopen(req).read())
-    raw_rates = data['rates']
-    date_str = data.get('time_last_update_utc', '')[:10]
+    raw = data['rates']
+    date = data.get('time_last_update_utc', '')[:10]
 
-    corrected = {
-        currency: rate / MC_CORRECTION
-        for currency, rate in raw_rates.items()
-    }
+    # rates[currency] = units of foreign per 1 TWD (MC-corrected)
+    rates = {c: r / MC_CORRECTION for c, r in raw.items()}
 
-    return {'date': date_str, 'rates': corrected}
+    if from_cur == 'TWD':
+        result = amount * rates[to_cur]
+        rate_str = f"1 TWD ≈ {fmt(rates[to_cur])} {to_cur}"
+    elif to_cur == 'TWD':
+        result = amount / rates[from_cur]
+        rate_str = f"1 {from_cur} ≈ {fmt(1 / rates[from_cur])} TWD"
+    else:
+        # cross rate via TWD
+        result = amount / rates[from_cur] * rates[to_cur]
+        cross = rates[to_cur] / rates[from_cur]
+        rate_str = f"1 {from_cur} ≈ {fmt(cross)} {to_cur}"
+
+    print(f"💱 匯率（{date}，Mastercard 估算）")
+    print()
+    print(rate_str)
+    print()
+    print(f"{fmt(amount)} {from_cur} ≈ {fmt(result)} {to_cur}")
+    print("（已套用 Mastercard +0.305% 修正）")
 
 
 if __name__ == '__main__':
-    result = fetch_mc_rates()
-    print(f"Date: {result['date']}")
-    for currency, rate in sorted(result['rates'].items()):
-        print(f'1 TWD = {rate:.4f} {currency}')
+    main()

@@ -19,21 +19,17 @@ Two modes: **Mastercard** (default) and **JCB**.
 
 First, use the **find-skill-script** skill to resolve the absolute path of `fetch_mc_rates.py` under the `scripts/` subdirectory.
 
-Run `python <fetch_mc_rates.py path>` to get a result dict:
-
-```python
-result = fetch_mc_rates()
-# result['date'] = '2026-04-04'
-# result['rates']['JPY'] = 4.97  means: 1 TWD ≈ 4.97 JPY (MC-corrected)
-
-# TWD → foreign
-foreign = twd_amount * result['rates'][FOREIGN]
-
-# Foreign → TWD
-twd = foreign_amount / result['rates'][FOREIGN]
+Run:
+```bash
+python <fetch_mc_rates.py path> <amount> <from_currency> <to_currency>
 ```
 
-Output:
+Example:
+```bash
+python /path/to/fetch_mc_rates.py 1000 TWD JPY
+```
+
+The script outputs the answer directly:
 ```
 💱 匯率（2026-04-04，Mastercard 估算）
 
@@ -43,20 +39,25 @@ Output:
 （已套用 Mastercard +0.305% 修正）
 ```
 
+Display the script output as-is.
+
 ---
 
 ## Mode 2: JCB rates (official PDF)
 
 First, use the **find-skill-script** skill to resolve the absolute path of `fetch_jcb_rates.py` under the `scripts/` subdirectory.
 
-Run `<fetch_jcb_rates.py path>` to get a rates dict:
-
-```python
-rates = fetch_jcb_rates()
-# rates['JPY'] = X means: 1 JPY = X TWD (opposite of open.er-api)
+Run:
+```bash
+python <fetch_jcb_rates.py path> <amount> <from_currency> <to_currency>
 ```
 
-Requires `pymupdf` (`pip install pymupdf`).
+Example:
+```bash
+python /path/to/fetch_jcb_rates.py 3000 JPY TWD
+```
+
+The script outputs the answer directly. Requires `pymupdf` (`pip install pymupdf`).
 
 ---
 
