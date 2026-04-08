@@ -14,75 +14,75 @@ def fmt(value):
 
 
 def fetch_mc(amount, from_cur, to_cur):
-    req = urllib.request.Request(
-        'https://open.er-api.com/v6/latest/TWD',
-        headers={'User-Agent': 'Mozilla/5.0'}
-    )
-    data = json.loads(urllib.request.urlopen(req).read())
-    rates = {c: r / MC_CORRECTION for c, r in data['rates'].items()}
-
     try:
+        req = urllib.request.Request(
+            'https://open.er-api.com/v6/latest/TWD',
+            headers={'User-Agent': 'Mozilla/5.0'}
+        )
+        data = json.loads(urllib.request.urlopen(req).read())
+        rates = {c: r / MC_CORRECTION for c, r in data['rates'].items()}
+
         if from_cur == 'TWD':
             result = amount * rates[to_cur]
         elif to_cur == 'TWD':
             result = amount / rates[from_cur]
         else:
             result = amount / rates[from_cur] * rates[to_cur]
-    except KeyError:
-        return None
 
-    return fmt(result)
+        return fmt(result)
+    except Exception:
+        return None
 
 
 def fetch_jcb(amount, from_cur, to_cur):
-    req = urllib.request.Request(
-        'https://www.specialoffers.jcb/zh-tw/services/other/rate/',
-        headers={'User-Agent': 'Mozilla/5.0'}
-    )
-    html = urllib.request.urlopen(req).read().decode('utf-8')
-    pdfs = re.findall(r'href="(/zh-tw/services/[a-f0-9_]+\.pdf)"', html)
-    pdf_url = 'https://www.specialoffers.jcb' + pdfs[0]
-
-    pdf_data = urllib.request.urlopen(
-        urllib.request.Request(pdf_url, headers={'User-Agent': 'Mozilla/5.0'})
-    ).read()
-    doc = pymupdf.open(stream=pdf_data, filetype='pdf')
-    text = ''.join(page.get_text() for page in doc)
-    lines = [l.strip() for l in text.strip().split('\n') if l.strip()]
-
-    header_start = next(i for i, l in enumerate(lines) if l == 'JCB Exchange Rate')
-    currencies, j = [], header_start + 1
-    while j < len(lines) and re.match(r'^[A-Z]{3}$', lines[j]):
-        currencies.append(lines[j])
-        j += 1
-
-    latest_day, latest_rates = None, None
-    for i, line in enumerate(lines):
-        m = re.match(r'^(\d+)日$', line)
-        if m:
-            values, k = [], i + 1
-            while len(values) < len(currencies) and k < len(lines):
-                try:
-                    values.append(float(lines[k]))
-                except ValueError:
-                    break
-                k += 1
-            if len(values) == len(currencies):
-                latest_day, latest_rates = int(m.group(1)), values
-
-    rates = dict(zip(currencies, latest_rates))
-
     try:
+        req = urllib.request.Request(
+            'https://www.specialoffers.jcb/zh-tw/services/other/rate/',
+            headers={'User-Agent': 'Mozilla/5.0'}
+        )
+        html = urllib.request.urlopen(req).read().decode('utf-8')
+        pdfs = re.findall(r'href="(/zh-tw/services/[a-f0-9_]+\.pdf)"', html)
+        pdf_url = 'https://www.specialoffers.jcb' + pdfs[0]
+
+        pdf_data = urllib.request.urlopen(
+            urllib.request.Request(pdf_url, headers={'User-Agent': 'Mozilla/5.0'})
+        ).read()
+        doc = pymupdf.open(stream=pdf_data, filetype='pdf')
+        text = ''.join(page.get_text() for page in doc)
+        lines = [l.strip() for l in text.strip().split('\n') if l.strip()]
+
+        header_start = next(i for i, l in enumerate(lines) if l == 'JCB Exchange Rate')
+        currencies, j = [], header_start + 1
+        while j < len(lines) and re.match(r'^[A-Z]{3}$', lines[j]):
+            currencies.append(lines[j])
+            j += 1
+
+        latest_day, latest_rates = None, None
+        for i, line in enumerate(lines):
+            m = re.match(r'^(\d+)日$', line)
+            if m:
+                values, k = [], i + 1
+                while len(values) < len(currencies) and k < len(lines):
+                    try:
+                        values.append(float(lines[k]))
+                    except ValueError:
+                        break
+                    k += 1
+                if len(values) == len(currencies):
+                    latest_day, latest_rates = int(m.group(1)), values
+
+        rates = dict(zip(currencies, latest_rates))
+
         if from_cur == 'TWD':
             result = amount / rates[to_cur]
         elif to_cur == 'TWD':
             result = amount * rates[from_cur]
         else:
             result = amount * rates[from_cur] / rates[to_cur]
-    except KeyError:
-        return None
 
-    return fmt(result)
+        return fmt(result)
+    except Exception:
+        return None
 
 
 def main():
