@@ -101,8 +101,8 @@ def main():
 
     print(f"💱 {fmt(amount)} {from_cur} → {to_cur}")
     print()
-    print(f"{mc_line:<{width}}   Mastercard")
-    print(f"{jcb_line:<{width}}   JCB")
+    print(f"{mc_line:<{width}}|Mastercard")
+    print(f"{jcb_line:<{width}}|JCB")
 
 
 if __name__ == '__main__':
