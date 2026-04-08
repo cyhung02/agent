@@ -1,6 +1,8 @@
 import json
 import sys
 import urllib.request
+from datetime import date as _date
+from email.utils import parsedate
 
 
 MC_CORRECTION = 1.00305  # MC charges ~0.305% above ECB
@@ -25,11 +27,14 @@ def main():
         headers={'User-Agent': 'Mozilla/5.0'}
     )
     data = json.loads(urllib.request.urlopen(req).read())
-    raw = data['rates']
-    date = data.get('time_last_update_utc', '')[:10]
+    try:
+        t = parsedate(data.get('time_last_update_utc', ''))
+        date = _date(t[0], t[1], t[2]).isoformat()
+    except Exception:
+        date = data.get('time_last_update_utc', '')[:10]
 
     # rates[currency] = units of foreign per 1 TWD (MC-corrected)
-    rates = {c: r / MC_CORRECTION for c, r in raw.items()}
+    rates = {c: r / MC_CORRECTION for c, r in data['rates'].items()}
 
     if from_cur == 'TWD':
         result = amount * rates[to_cur]
