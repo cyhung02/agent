@@ -1,6 +1,5 @@
 // Cloudflare Worker: Google Routes API Proxy
 // Set GMAPS_API_KEY as an environment variable
-//
 // Supported paths:
 //   POST /computeRoutes       → routes.googleapis.com/directions/v2:computeRoutes
 //   POST /computeRouteMatrix  → routes.googleapis.com/distanceMatrix/v2:computeRouteMatrix
