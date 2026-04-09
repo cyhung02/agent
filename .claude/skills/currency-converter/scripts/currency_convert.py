@@ -6,6 +6,9 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pymupdf  # pip install pymupdf
 
+MC_CORRECTION = 1.00489  # MC charges ~0.49% above Wise mid-market rate
+
+
 def fmt(value):
     return f"{value:,.0f}" if value >= 10 else f"{value:,.2f}"
 
@@ -15,7 +18,7 @@ def fetch_mc(amount, from_cur, to_cur):
         url = f'https://wise.com/rates/live?source={from_cur}&target={to_cur}'
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
         data = json.loads(urllib.request.urlopen(req).read())
-        rate = data['value']
+        rate = data['value'] * MC_CORRECTION
         return fmt(amount * rate)
     except Exception:
         return None
