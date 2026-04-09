@@ -7,6 +7,19 @@ description: Google Maps Platform skill for routing, geocoding, place search, pl
 
 Direct curl calls to Google Maps Platform APIs.
 
+## Cloudflare Worker Proxy
+
+Use the proxy for Routes API calls (holds the API key server-side):
+
+```
+https://routes.cyhung02.workers.dev
+```
+
+- `POST /computeRoutes` → Routes API computeRoutes
+- `POST /computeRouteMatrix` → Routes API computeRouteMatrix
+
+For all other APIs (Geocoding, Places, etc.), call Google directly using `$GMAPS_API_KEY`.
+
 ## API Key
 
 Read from env or user preferences: `GMAPS_API_KEY`
@@ -43,8 +56,7 @@ Pick the right API before making any call:
 ## 1. Routes API — computeRoutes (Route + travel time)
 
 ```bash
-curl -s -X POST "https://routes.googleapis.com/directions/v2:computeRoutes" \
-  -H "X-Goog-Api-Key: $GMAPS_API_KEY" \
+curl -s -X POST "https://routes.cyhung02.workers.dev/computeRoutes" \
   -H "X-Goog-FieldMask: routes.duration,routes.distanceMeters,routes.legs.duration,routes.legs.distanceMeters" \
   -H "Content-Type: application/json" \
   -d '{
@@ -58,6 +70,7 @@ curl -s -X POST "https://routes.googleapis.com/directions/v2:computeRoutes" \
 
 - `travelMode`: `WALK` | `DRIVE` | `TRANSIT` | `BICYCLE` | `TWO_WHEELER`
 - **WALK / BICYCLE / TWO_WHEELER are Beta** — paths may be incomplete; always add a disclaimer to the user (e.g. "路徑資料可能不完整，請注意實際狀況")
+- **TRANSIT does not work in Japan** — use the Yahoo Transit skill instead for any Japanese transit queries
 - **When `travelMode=TRANSIT`, set `"computeAlternativeRoutes": true`** to get multiple route options (Google's "best" route is not always fastest — other options may be better). Iterate over all `routes[]` and present each one to the user.
 - For transit with step details, add to FieldMask: `,routes.legs.steps.transitDetails,routes.legs.steps.navigationInstruction`
 - Key fields: `routes[n].distanceMeters` (int meters), `routes[n].duration` (string e.g. `"165s"` — parse seconds with `parseInt("165s")`)
@@ -133,8 +146,7 @@ curl -s -X POST "https://places.googleapis.com/v1/places:searchNearby" \
 Use when the user needs distances/times between multiple points at once (“這幾個景點怎麼排最省時間？”).
 
 ```bash
-curl -s -X POST “https://routes.googleapis.com/distanceMatrix/v2:computeRouteMatrix” \
-  -H “X-Goog-Api-Key: $GMAPS_API_KEY” \
+curl -s -X POST “https://routes.cyhung02.workers.dev/computeRouteMatrix” \
   -H “X-Goog-FieldMask: originIndex,destinationIndex,duration,distanceMeters,status,condition” \
   -H “Content-Type: application/json” \
   -d '{
