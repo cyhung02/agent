@@ -1,0 +1,7 @@
+name = "gmaps-routes-proxy"
+main = "gmaps.js"
+compatibility_date = "2024-01-01"
+
+[vars]
+# GMAPS_API_KEY should be set as a secret, not here
+# Run: wrangler secret put GMAPS_API_KEY
