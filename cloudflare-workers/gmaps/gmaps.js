@@ -1,5 +1,4 @@
 // Cloudflare Worker: Google Routes API Proxy
-// Deploy at: https://dash.cloudflare.com/workers
 // Set GMAPS_API_KEY as an environment variable
 //
 // Supported paths:
