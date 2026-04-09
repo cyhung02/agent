@@ -44,7 +44,7 @@ Pick the right API before making any call:
 |-------------------|---------------------------------------|
 |「從A走到B要多久」         |Routes API (computeRoutes)             |
 |「這個地址的座標是什麼」       |Geocoding API                          |
-|「新宿駅、東京鐵塔的座標」（一般地名）|Text Search（比 Geocoding 省配額）          |
+|「新宿駅、東京鐵塔的座標」（一般地名）|Text Search          |
 |「新宿附近好吃的拉麵」        |Text Search                            |
 |「飯店300m內的便利商店」     |Nearby Search                          |
 |「這幾個景點怎麼排最省時間」     |Routes API (computeRouteMatrix)        |
