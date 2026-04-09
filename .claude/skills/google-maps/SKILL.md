@@ -70,7 +70,7 @@ curl -s -X POST "https://routes.cyhung02.workers.dev/computeRoutes" \
 
 - `travelMode`: `WALK` | `DRIVE` | `TRANSIT` | `BICYCLE` | `TWO_WHEELER`
 - **WALK / BICYCLE / TWO_WHEELER are Beta** — paths may be incomplete; always add a disclaimer to the user (e.g. "路徑資料可能不完整，請注意實際狀況")
-- **TRANSIT does not work in Japan** — use the Yahoo Transit skill instead for any Japanese transit queries
+- **TRANSIT may return empty results in Japan** (empirically observed; no official coverage docs) — if `routes[]` is missing or empty, fall back to the Yahoo Transit skill
 - **When `travelMode=TRANSIT`, set `"computeAlternativeRoutes": true`** to get multiple route options (Google's "best" route is not always fastest — other options may be better). Iterate over all `routes[]` and present each one to the user.
 - For transit with step details, add to FieldMask: `,routes.legs.steps.transitDetails,routes.legs.steps.navigationInstruction`
 - Key fields: `routes[n].distanceMeters` (int meters), `routes[n].duration` (string e.g. `"165s"` — parse seconds with `parseInt("165s")`)
