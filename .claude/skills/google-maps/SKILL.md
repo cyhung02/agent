@@ -27,28 +27,40 @@ Use the returned `latitude` and `longitude` as the origin or search center for s
 
 Pick the right API before making any call:
 
-|Scenario           |Use                         |
-|-------------------|----------------------------|
-|「從A走到B要多久」         |Directions API              |
-|「這個地址的座標是什麼」       |Geocoding API               |
-|「新宿駅、東京鐵塔的座標」（一般地名）|Text Search（比 Geocoding 省配額）|
-|「新宿附近好吃的拉麵」        |Text Search                 |
-|「飯店300m內的便利商店」     |Nearby Search               |
-|「這幾個景點怎麼排最省時間」     |Distance Matrix             |
-|「這個地點的電話/營業時間」     |Place Details               |
-|「這個地點的照片」          |Place Photos                |
+|Scenario           |Use                                    |
+|-------------------|---------------------------------------|
+|「從A走到B要多久」         |Routes API (computeRoutes)             |
+|「這個地址的座標是什麼」       |Geocoding API                          |
+|「新宿駅、東京鐵塔的座標」（一般地名）|Text Search（比 Geocoding 省配額）          |
+|「新宿附近好吃的拉麵」        |Text Search                            |
+|「飯店300m內的便利商店」     |Nearby Search                          |
+|「這幾個景點怎麼排最省時間」     |Routes API (computeRouteMatrix)        |
+|「這個地點的電話/營業時間」     |Place Details                          |
+|「這個地點的照片」          |Place Photos                           |
 
 -----
 
-## 1. Directions API — Route + travel time
+## 1. Routes API — computeRoutes (Route + travel time)
 
 ```bash
-curl -s "https://maps.googleapis.com/maps/api/directions/json?origin=<lat>,<lng>&destination=<lat>,<lng>&mode=<mode>&language=zh-TW&key=$GMAPS_API_KEY"
+curl -s -X POST "https://routes.googleapis.com/directions/v2:computeRoutes" \
+  -H "X-Goog-Api-Key: $GMAPS_API_KEY" \
+  -H "X-Goog-FieldMask: routes.duration,routes.distanceMeters,routes.legs.duration,routes.legs.distanceMeters" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "origin": {"location": {"latLng": {"latitude": <lat>, "longitude": <lng>}}},
+    "destination": {"location": {"latLng": {"latitude": <lat>, "longitude": <lng>}}},
+    "travelMode": "<MODE>",
+    "computeAlternativeRoutes": false,
+    "languageCode": "zh-TW"
+  }'
 ```
 
-- `mode`: `walking` | `driving` | `transit` | `bicycling`
-- **When `mode=transit`, always append `&alternatives=true`** to get multiple route options (Google's "best" route is not always fastest — other options may be better). Iterate over all `routes[]` and present each one to the user.
-- Key fields: `routes[n].legs[0].distance.value` (meters), `routes[n].legs[0].duration.value` (seconds)
+- `travelMode`: `WALK` | `DRIVE` | `TRANSIT` | `BICYCLE` | `TWO_WHEELER`
+- **When `travelMode=TRANSIT`, set `"computeAlternativeRoutes": true`** to get multiple route options (Google's "best" route is not always fastest — other options may be better). Iterate over all `routes[]` and present each one to the user.
+- For transit with step details, add to FieldMask: `,routes.legs.steps.transitDetails,routes.legs.steps.navigationInstruction`
+- Key fields: `routes[n].distanceMeters` (int meters), `routes[n].duration` (string e.g. `"165s"` — parse seconds with `parseInt("165s")`)
+- Leg-level: `routes[n].legs[n].distanceMeters`, `routes[n].legs[n].duration`
 
 -----
 
@@ -115,17 +127,33 @@ curl -s -X POST "https://places.googleapis.com/v1/places:searchNearby" \
 
 -----
 
-## 5. Distance Matrix API — Multi-point distance table
+## 5. Routes API — computeRouteMatrix (Multi-point distance table)
 
 Use when the user needs distances/times between multiple points at once (“這幾個景點怎麼排最省時間？”).
 
 ```bash
-curl -s "https://maps.googleapis.com/maps/api/distancematrix/json?origins=<lat1>,<lng1>|<lat2>,<lng2>&destinations=<lat1>,<lng1>|<lat2>,<lng2>&mode=<mode>&language=zh-TW&key=$GMAPS_API_KEY"
+curl -s -X POST “https://routes.googleapis.com/distanceMatrix/v2:computeRouteMatrix” \
+  -H “X-Goog-Api-Key: $GMAPS_API_KEY” \
+  -H “X-Goog-FieldMask: originIndex,destinationIndex,duration,distanceMeters,status,condition” \
+  -H “Content-Type: application/json” \
+  -d '{
+    “origins”: [
+      {“waypoint”: {“location”: {“latLng”: {“latitude”: <lat1>, “longitude”: <lng1>}}}},
+      {“waypoint”: {“location”: {“latLng”: {“latitude”: <lat2>, “longitude”: <lng2>}}}}
+    ],
+    “destinations”: [
+      {“waypoint”: {“location”: {“latLng”: {“latitude”: <lat1>, “longitude”: <lng1>}}}},
+      {“waypoint”: {“location”: {“latLng”: {“latitude”: <lat2>, “longitude”: <lng2>}}}}
+    ],
+    “travelMode”: “DRIVE”,
+    “languageCode”: “zh-TW”
+  }'
 ```
 
-- Separate multiple origins/destinations with `|`
-- Returns N×M matrix: every origin to every destination
-- Key fields: `rows[i].elements[j].distance.value` (meters), `rows[i].elements[j].duration.value` (seconds)
+- Returns **flat array** (not nested rows/elements): `[n].originIndex`, `[n].destinationIndex`
+- Key fields: `[n].distanceMeters` (int), `[n].duration` (string e.g. `”300s”` — parse with `parseInt`)
+- Check `[n].condition === “ROUTE_EXISTS”` before reading distance/duration
+- Limit: origins × destinations ≤ 625; total address/placeId waypoints combined ≤ 50
 - Billed per element (origins × destinations), not per request
 
 -----
@@ -216,6 +244,7 @@ SKU tiers and free monthly quota per SKU (as of March 2025):
 
 ## Important Notes
 
-- Check `status === "OK"` for Directions / Geocoding / Distance Matrix responses
+- Check `status === "OK"` for Geocoding responses
+- Routes API (computeRoutes / computeRouteMatrix): no top-level `status` — check HTTP status code; for matrix elements check `[n].condition === "ROUTE_EXISTS"`
 - Places API (v1) returns HTTP 200 even on errors — always check for an `error` field
 - Place Photos: download to `/mnt/user-data/outputs/` then use `present_files` to display
