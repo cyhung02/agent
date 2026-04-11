@@ -46,6 +46,7 @@ const idArg    = get('--id') || '';
 const checkin  = get('--checkin') || '';
 const checkout = get('--checkout') || '';
 const adults   = parseInt(get('--adults') || '2', 10);
+const children = parseInt(get('--children') || '0', 10);
 const rooms    = parseInt(get('--rooms') || '1', 10);
 const currency = (get('--currency') || 'TWD').toUpperCase();
 
@@ -135,7 +136,7 @@ function buildHeaders(apiKey) {
     '-H', 'Origin: https://www.agoda.com',
     '-H', `ag-initiator-api-key: ${apiKey}`,
     '-H', 'ag-initiator-version: 6_0',
-    '-H', 'ag-language-locale: en-us',
+    '-H', 'ag-language-locale: zh-tw',
     '-H', 'ag-request-attempt: 1',
     '-H', 'ag-retry-attempt: 0',
     '-H', 'ag-cid: -1',
@@ -167,7 +168,7 @@ function curlPost(url, body, referer, apiKey) {
 function modeSuggest(apiKey) {
   if (!nameArg) { console.error('Error: --name is required'); process.exit(1); }
 
-  const url = `https://www.agoda.com/api/cronos/search/GetUnifiedSuggestResult/3/20/20/0/en-us/?searchText=${encodeURIComponent(nameArg)}&isHotelSearch=true`;
+  const url = `https://www.agoda.com/api/cronos/search/GetUnifiedSuggestResult/3/20/20/0/zh-tw/?searchText=${encodeURIComponent(nameArg)}&isHotelSearch=true`;
 
   let data;
   try {
@@ -234,7 +235,7 @@ function modePrice(apiKey) {
       checkOut: checkout,
       rooms,
       adults,
-      children: 0,
+      children,
     },
   };
 
@@ -251,7 +252,9 @@ function modePrice(apiKey) {
   const result = {
     propertyId: data.propertyId,
     hotelName: data.propertyName,
-    searchCriteria: data.searchCriteriaDescription,
+    searchCriteria: rooms > 1
+      ? `${data.searchCriteriaDescription}，${rooms}間客房`
+      : data.searchCriteriaDescription,
     isSoldOut: data.isSoldOut,
     currency,
     rooms: [],
@@ -261,36 +264,35 @@ function modePrice(apiKey) {
     const roomEntry = {
       name: room.name,
       isSoldOut: room.isSoldOut || false,
-      size: room.roomSize?.displayText || null,
+      size: room.roomSize || null,
+      beds: (room.features || [])
+        .filter(f => f.type === 'BEDROOM_LAYOUT')
+        .map(f => f.text)
+        .filter(Boolean),
       offers: [],
     };
 
-    for (const offer of (room.offers || []).slice(0, 3)) {
-      // hotel_price_per_book in analyticsContext is the inclusive (after taxes) price per night
-      const inclAmount = offer.analyticsContext?.hotel_price_per_book;
-      const exclAmount = offer.price?.final?.amountNumber;
-      const offerCurrency = offer.price?.final?.currency || '';
+    for (const offer of (room.offers || [])) {
+      // Skip offers that Agoda flags as exceeding occupancy for the requested room count
+      const roomTag = `${rooms}間客房`;
+      const hasOccupancyError = (offer.occupancyItems || []).some(
+        item => item.type === 'AMENITIES_ERROR' && (item.occupancyTags || []).includes(roomTag)
+      );
+      if (hasOccupancyError) continue;
 
-      // Format inclusive price display string (same currency symbol as exclusive)
-      const inclDisplay = inclAmount
-        ? `${offerCurrency}\u00a0${Math.round(inclAmount).toLocaleString()}`
-        : null;
+      // hotel_price_per_book in analyticsContext is the inclusive (after taxes) price per night,
+      // in the same currency as the request (confirmed: equals price.final * 1.10 for Japan 10% tax)
+      const inclAmount = offer.analyticsContext?.hotel_price_per_book;
 
       roomEntry.offers.push({
-        name: offer.name || offer.title || null,
-        price: inclDisplay ? {
+        price: inclAmount ? {
           amount: Math.round(inclAmount),
-          display: inclDisplay,
-          amountExclTax: exclAmount,
         } : null,
         benefits: (offer.benefits || []).map(b => b.name || b.text).filter(Boolean),
-        policies: (offer.policies || [])
-          .map(p => ({ type: p.type, title: p.title }))
-          .filter(p => p.title),
       });
     }
 
-    result.rooms.push(roomEntry);
+    if (roomEntry.offers.length > 0) result.rooms.push(roomEntry);
   }
 
   console.log(JSON.stringify(result, null, 2));
