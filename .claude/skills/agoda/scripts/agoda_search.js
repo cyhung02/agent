@@ -265,6 +265,10 @@ function modePrice(apiKey) {
       name: room.name,
       isSoldOut: room.isSoldOut || false,
       size: room.roomSize || null,
+      beds: (room.features || [])
+        .filter(f => f.type === 'BEDROOM_LAYOUT')
+        .map(f => f.text)
+        .filter(Boolean),
       offers: [],
     };
 
