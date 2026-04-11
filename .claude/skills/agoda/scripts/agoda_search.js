@@ -267,8 +267,12 @@ function modePrice(apiKey) {
     };
 
     for (const offer of (room.offers || [])) {
-      // Skip offers that Agoda flags as exceeding room occupancy limit
-      if ((offer.occupancyItems || []).some(item => item.type === 'AMENITIES_ERROR')) continue;
+      // Skip offers that Agoda flags as exceeding occupancy for the requested room count
+      const roomTag = `${rooms}間客房`;
+      const hasOccupancyError = (offer.occupancyItems || []).some(
+        item => item.type === 'AMENITIES_ERROR' && (item.occupancyTags || []).includes(roomTag)
+      );
+      if (hasOccupancyError) continue;
 
       // hotel_price_per_book in analyticsContext is the inclusive (after taxes) price per night,
       // in the same currency as the request (confirmed: equals price.final * 1.10 for Japan 10% tax)
