@@ -266,17 +266,11 @@ function modePrice(apiKey) {
     };
 
     for (const offer of (room.offers || []).slice(0, 3)) {
-      // Use inclusive (after taxes) price if available, otherwise fall back to final price
-      // Note: analyticsContext.hotel_price_per_book is in analytics currency (USD) — do NOT use for display
-      const inclAmount = offer.price?.inclusive?.amountNumber
-        ?? offer.price?.perRoomPerNight?.inclusive?.amountNumber
-        ?? offer.price?.final?.amountNumber;
-      const exclAmount = offer.price?.exclusive?.amountNumber
-        ?? offer.price?.perRoomPerNight?.exclusive?.amountNumber
-        ?? offer.price?.final?.amountNumber;
-      const offerCurrency = offer.price?.inclusive?.currency
-        || offer.price?.final?.currency
-        || currency;
+      // hotel_price_per_book in analyticsContext is the inclusive (after taxes) price per night,
+      // in the same currency as the request (confirmed: equals price.final * 1.10 for Japan 10% tax)
+      const inclAmount = offer.analyticsContext?.hotel_price_per_book;
+      const exclAmount = offer.price?.final?.amountNumber;
+      const offerCurrency = offer.price?.final?.currency || currency;
 
       const inclDisplay = inclAmount
         ? `${offerCurrency}\u00a0${Math.round(inclAmount).toLocaleString()}`
