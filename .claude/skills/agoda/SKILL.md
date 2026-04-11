@@ -126,8 +126,7 @@ Returns JSON:
 ```
 
 **Price fields:**
-- `price.amount` — inclusive price (taxes included) per night, rounded
-- `price.display` — formatted display string with currency symbol
+- `price.amount` — inclusive price (taxes included) per night, rounded; currency is indicated by the top-level `currency` field
 
 ---
 

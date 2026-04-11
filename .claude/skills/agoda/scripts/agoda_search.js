@@ -269,17 +269,11 @@ function modePrice(apiKey) {
       // hotel_price_per_book in analyticsContext is the inclusive (after taxes) price per night,
       // in the same currency as the request (confirmed: equals price.final * 1.10 for Japan 10% tax)
       const inclAmount = offer.analyticsContext?.hotel_price_per_book;
-      const offerCurrency = offer.price?.final?.currency || currency;
-
-      const inclDisplay = inclAmount
-        ? `${offerCurrency}\u00a0${Math.round(inclAmount).toLocaleString()}`
-        : null;
 
       roomEntry.offers.push({
         name: offer.name || offer.title || null,
-        price: inclDisplay ? {
+        price: inclAmount ? {
           amount: Math.round(inclAmount),
-          display: inclDisplay,
         } : null,
         benefits: (offer.benefits || []).map(b => b.name || b.text).filter(Boolean),
         policies: (offer.policies || [])
