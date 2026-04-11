@@ -76,6 +76,7 @@ node <agoda_search.js path> \
 | `--checkin` | (required) | Check-in date `YYYY-MM-DD` |
 | `--checkout` | (required) | Check-out date `YYYY-MM-DD` |
 | `--adults` | `2` | Number of adults |
+| `--children` | `0` | Number of children |
 | `--rooms` | `1` | Number of rooms |
 | `--currency` | `TWD` | Currency code (see table below) |
 
@@ -100,32 +101,31 @@ Returns JSON:
 {
   "propertyId": "621491",
   "hotelName": "JR Kyushu Blossom Shinjuku",
-  "searchCriteria": "1 room, 2 adults, 1 night",
+  "searchCriteria": "6月1日 - 6月2日, 2人",
   "isSoldOut": false,
   "currency": "TWD",
   "rooms": [
     {
       "name": "Standard Double Room",
       "isSoldOut": false,
-      "size": "22 m²",
+      "size": "22平方公尺/237平方英尺",
+      "beds": ["1張大床"],
       "offers": [
         {
-          "name": "Room Only",
           "price": {
-            "amount": 4500,
-            "display": "TWD 4,500",
-            "amountExclTax": 3900
+            "amount": 4500
           },
-          "benefits": ["Free cancellation"],
-          "policies": [
-            { "type": "cancellation", "title": "Free cancellation before Jun 1" }
-          ]
+          "benefits": ["2026年5月25日前可免費取消", "附早餐"]
         }
       ]
     }
   ]
 }
 ```
+
+**Room fields:**
+- `size` — room size string from Agoda (may be `null` if unavailable)
+- `beds` — bed type(s) from Agoda (e.g. `["1張大床"]`, `["2張單人床"]`); empty array if unavailable
 
 **Price fields:**
 - `price.amount` — inclusive price (taxes included) per night, rounded; currency is indicated by the top-level `currency` field
@@ -137,8 +137,8 @@ Returns JSON:
 When presenting room prices to the user:
 
 1. Show hotel name, search criteria (dates, guests, rooms).
-2. For each room type, show: room name, size (if available), and up to 3 offers.
-3. For each offer, show: offer name, inclusive price (`price.display`), key benefits, and cancellation policy.
+2. For each room type, show: room name, bed type (`beds`), size (if available), and all offers.
+3. For each offer, show: inclusive price (`price.amount` + top-level `currency`), and key benefits.
 4. If `isSoldOut` is `true` at the hotel level, inform the user the property is fully booked.
 5. If a specific room `isSoldOut` is `true`, note it is unavailable.
 
