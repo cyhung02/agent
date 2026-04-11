@@ -252,7 +252,9 @@ function modePrice(apiKey) {
   const result = {
     propertyId: data.propertyId,
     hotelName: data.propertyName,
-    searchCriteria: data.searchCriteriaDescription,
+    searchCriteria: rooms > 1
+      ? `${data.searchCriteriaDescription}，${rooms}間客房`
+      : data.searchCriteriaDescription,
     isSoldOut: data.isSoldOut,
     currency,
     rooms: [],
@@ -286,7 +288,7 @@ function modePrice(apiKey) {
       });
     }
 
-    result.rooms.push(roomEntry);
+    if (roomEntry.offers.length > 0) result.rooms.push(roomEntry);
   }
 
   console.log(JSON.stringify(result, null, 2));
