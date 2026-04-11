@@ -135,7 +135,7 @@ function buildHeaders(apiKey) {
     '-H', 'Origin: https://www.agoda.com',
     '-H', `ag-initiator-api-key: ${apiKey}`,
     '-H', 'ag-initiator-version: 6_0',
-    '-H', 'ag-language-locale: en-us',
+    '-H', 'ag-language-locale: zh-tw',
     '-H', 'ag-request-attempt: 1',
     '-H', 'ag-retry-attempt: 0',
     '-H', 'ag-cid: -1',
@@ -167,7 +167,7 @@ function curlPost(url, body, referer, apiKey) {
 function modeSuggest(apiKey) {
   if (!nameArg) { console.error('Error: --name is required'); process.exit(1); }
 
-  const url = `https://www.agoda.com/api/cronos/search/GetUnifiedSuggestResult/3/20/20/0/en-us/?searchText=${encodeURIComponent(nameArg)}&isHotelSearch=true`;
+  const url = `https://www.agoda.com/api/cronos/search/GetUnifiedSuggestResult/3/20/20/0/zh-tw/?searchText=${encodeURIComponent(nameArg)}&isHotelSearch=true`;
 
   let data;
   try {
@@ -266,12 +266,18 @@ function modePrice(apiKey) {
     };
 
     for (const offer of (room.offers || []).slice(0, 3)) {
-      // hotel_price_per_book in analyticsContext is the inclusive (after taxes) price per night
-      const inclAmount = offer.analyticsContext?.hotel_price_per_book;
-      const exclAmount = offer.price?.final?.amountNumber;
-      const offerCurrency = offer.price?.final?.currency || '';
+      // Use inclusive (after taxes) price if available, otherwise fall back to final price
+      // Note: analyticsContext.hotel_price_per_book is in analytics currency (USD) — do NOT use for display
+      const inclAmount = offer.price?.inclusive?.amountNumber
+        ?? offer.price?.perRoomPerNight?.inclusive?.amountNumber
+        ?? offer.price?.final?.amountNumber;
+      const exclAmount = offer.price?.exclusive?.amountNumber
+        ?? offer.price?.perRoomPerNight?.exclusive?.amountNumber
+        ?? offer.price?.final?.amountNumber;
+      const offerCurrency = offer.price?.inclusive?.currency
+        || offer.price?.final?.currency
+        || currency;
 
-      // Format inclusive price display string (same currency symbol as exclusive)
       const inclDisplay = inclAmount
         ? `${offerCurrency}\u00a0${Math.round(inclAmount).toLocaleString()}`
         : null;
