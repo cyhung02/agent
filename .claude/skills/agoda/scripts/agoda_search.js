@@ -266,6 +266,10 @@ function modePrice(apiKey) {
     };
 
     for (const offer of (room.offers || [])) {
+      // Skip offers whose max occupancy is below the requested adult count
+      const offerAdults = parseInt(offer.occupancyItems?.[0]?.dataAttributes?.['data-adults'] || adults, 10);
+      if (offerAdults < adults) continue;
+
       // hotel_price_per_book in analyticsContext is the inclusive (after taxes) price per night,
       // in the same currency as the request (confirmed: equals price.final * 1.10 for Japan 10% tax)
       const inclAmount = offer.analyticsContext?.hotel_price_per_book;
