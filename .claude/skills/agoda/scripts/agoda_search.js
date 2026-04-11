@@ -271,15 +271,10 @@ function modePrice(apiKey) {
       const inclAmount = offer.analyticsContext?.hotel_price_per_book;
 
       roomEntry.offers.push({
-        name: offer.name || offer.title || null,
         price: inclAmount ? {
           amount: Math.round(inclAmount),
         } : null,
-        breakfastIncluded: offer.bookingDetails?.isBreakfastIncluded ?? null,
         benefits: (offer.benefits || []).map(b => b.name || b.text).filter(Boolean),
-        policies: (offer.policies || [])
-          .map(p => ({ name: p.name, description: p.descriptions?.[0] }))
-          .filter(p => p.description),
       });
     }
 
