@@ -261,7 +261,7 @@ function modePrice(apiKey) {
     const roomEntry = {
       name: room.name,
       isSoldOut: room.isSoldOut || false,
-      size: room.roomSize?.displayText || null,
+      size: room.roomSize || null,
       offers: [],
     };
 
