@@ -46,6 +46,7 @@ const idArg    = get('--id') || '';
 const checkin  = get('--checkin') || '';
 const checkout = get('--checkout') || '';
 const adults   = parseInt(get('--adults') || '2', 10);
+const children = parseInt(get('--children') || '0', 10);
 const rooms    = parseInt(get('--rooms') || '1', 10);
 const currency = (get('--currency') || 'TWD').toUpperCase();
 
@@ -234,7 +235,7 @@ function modePrice(apiKey) {
       checkOut: checkout,
       rooms,
       adults,
-      children: 0,
+      children,
     },
   };
 
@@ -266,9 +267,8 @@ function modePrice(apiKey) {
     };
 
     for (const offer of (room.offers || [])) {
-      // Skip offers whose max occupancy is below the requested adult count
-      const offerAdults = parseInt(offer.occupancyItems?.[0]?.dataAttributes?.['data-adults'] || adults, 10);
-      if (offerAdults < adults) continue;
+      // Skip offers that Agoda flags as exceeding room occupancy limit
+      if ((offer.occupancyItems || []).some(item => item.type === 'AMENITIES_ERROR')) continue;
 
       // hotel_price_per_book in analyticsContext is the inclusive (after taxes) price per night,
       // in the same currency as the request (confirmed: equals price.final * 1.10 for Japan 10% tax)
