@@ -265,7 +265,7 @@ function modePrice(apiKey) {
       offers: [],
     };
 
-    for (const offer of (room.offers || []).slice(0, 3)) {
+    for (const offer of (room.offers || [])) {
       // hotel_price_per_book in analyticsContext is the inclusive (after taxes) price per night,
       // in the same currency as the request (confirmed: equals price.final * 1.10 for Japan 10% tax)
       const inclAmount = offer.analyticsContext?.hotel_price_per_book;

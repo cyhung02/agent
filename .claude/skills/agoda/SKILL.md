@@ -79,6 +79,8 @@ node <agoda_search.js path> \
 | `--rooms` | `1` | Number of rooms |
 | `--currency` | `TWD` | Currency code (see table below) |
 
+All offers for each room type are returned (no limit).
+
 **Supported currencies:**
 
 | Code | Currency |
