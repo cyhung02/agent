@@ -126,10 +126,8 @@ Returns JSON:
 ```
 
 **Price fields:**
-- `price.amount` — inclusive price (taxes included) per night, rounded; sourced from `analyticsContext.hotel_price_per_book` which equals `price.final × (1 + local tax rate)`
+- `price.amount` — inclusive price (taxes included) per night, rounded
 - `price.display` — formatted display string with currency symbol
-- `price.amountExclTax` — price before taxes (from `price.final.amountNumber`)
-- `price.note` — tax/pricing note from Agoda (e.g. "每晚（不含稅）"), describing the pre-tax base price
 
 ---
 
