@@ -126,9 +126,10 @@ Returns JSON:
 ```
 
 **Price fields:**
-- `price.amount` — inclusive price (taxes included) per night, rounded
+- `price.amount` — price per night as returned by the API, rounded
 - `price.display` — formatted display string with currency symbol
-- `price.amountExclTax` — price before taxes
+- `price.amountExclTax` — price before taxes (may equal `amount` if API returns only pre-tax price)
+- `price.note` — tax/pricing note from Agoda (e.g. "每晚（不含稅）"), shown to user alongside the price
 
 ---
 

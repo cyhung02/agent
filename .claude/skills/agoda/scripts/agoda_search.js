@@ -282,12 +282,15 @@ function modePrice(apiKey) {
         ? `${offerCurrency}\u00a0${Math.round(inclAmount).toLocaleString()}`
         : null;
 
+      const priceNote = (offer.price?.priceInfo || []).join('、') || null;
+
       roomEntry.offers.push({
         name: offer.name || offer.title || null,
         price: inclDisplay ? {
           amount: Math.round(inclAmount),
           display: inclDisplay,
           amountExclTax: exclAmount,
+          note: priceNote,
         } : null,
         benefits: (offer.benefits || []).map(b => b.name || b.text).filter(Boolean),
         policies: (offer.policies || [])
