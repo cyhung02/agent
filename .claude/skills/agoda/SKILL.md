@@ -104,6 +104,7 @@ Returns JSON:
   "searchCriteria": "6月1日 - 6月2日, 2人",
   "isSoldOut": false,
   "currency": "TWD",
+  "bookingUrl": "https://www.agoda.com/zh-tw/jr-kyushu-hotel-blossom-shinjuku/hotel/tokyo-jp.html?checkIn=2026-06-01&los=1&adults=2&children=0&rooms=1&currencyCode=TWD",
   "rooms": [
     {
       "name": "Standard Double Room",
@@ -141,6 +142,7 @@ When presenting room prices to the user:
 3. For each offer, show: inclusive price (`price.amount` + top-level `currency`), and key benefits.
 4. If `isSoldOut` is `true` at the hotel level, inform the user the property is fully booked.
 5. If a specific room `isSoldOut` is `true`, note it is unavailable.
+6. Always show the `bookingUrl` as a clickable link so the user can proceed to book on Agoda.
 
 ---
 
@@ -148,7 +150,7 @@ When presenting room prices to the user:
 
 > **Never fabricate hotel URLs, propertyIds, or prices.**
 >
-> All data must come directly from the script output. Do not guess or reconstruct URLs or property IDs from memory.
+> All data must come directly from the script output. Do not guess or reconstruct URLs or property IDs from memory. The `bookingUrl` in the price result is constructed by the script from real API data — always use it as-is, never modify it.
 
 > **If the hotel is not found in suggest results, say so clearly.**
 >
