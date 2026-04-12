@@ -355,13 +355,10 @@ function modePrice(apiKey) {
   // Calculate length of stay in nights
   const los = Math.round((new Date(checkout) - new Date(checkin)) / (1000 * 60 * 60 * 24));
 
-  // Try to get the direct hotel page URL via GraphQL (falls back to search listing on failure)
   const propertyPage = cityId ? getPropertyPagePath(idArg, cityId, apiKey) : null;
   const bookingUrl = propertyPage
     ? `https://www.agoda.com/zh-tw${propertyPage}?checkIn=${checkin}&los=${los}&adults=${adults}&children=${children}&rooms=${rooms}&currencyCode=${currency}`
-    : cityId
-      ? `https://www.agoda.com/zh-tw/search?selectedproperty=${idArg}&checkIn=${checkin}&checkOut=${checkout}&rooms=${rooms}&adults=${adults}&children=${children}&city=${cityId}`
-      : `https://www.agoda.com/zh-tw/search?selectedproperty=${idArg}&checkIn=${checkin}&checkOut=${checkout}&rooms=${rooms}&adults=${adults}&children=${children}`;
+    : null;
 
   const result = {
     propertyId: data.propertyId,

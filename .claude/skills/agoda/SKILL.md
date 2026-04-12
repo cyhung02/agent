@@ -142,7 +142,7 @@ When presenting room prices to the user:
 3. For each offer, show: inclusive price (`price.amount` + top-level `currency`), and key benefits.
 4. If `isSoldOut` is `true` at the hotel level, inform the user the property is fully booked.
 5. If a specific room `isSoldOut` is `true`, note it is unavailable.
-6. Always show the `bookingUrl` as a clickable link so the user can proceed to book on Agoda.
+6. If `bookingUrl` is present (non-null), show it as a clickable link so the user can proceed to book on Agoda. If it is `null`, omit it.
 
 ---
 
