@@ -21,6 +21,7 @@
 'use strict';
 
 const { execFileSync, spawn } = require('child_process');
+const crypto = require('crypto');
 const fs   = require('fs');
 const os   = require('os');
 const path = require('path');
@@ -188,6 +189,7 @@ function modeSuggest(apiKey) {
         name: item.Name || item.Header || '',
         city: item.CityName || '',
         country: item.ResultAddress || '',
+        resultUrl: item.ResultUrl ? `https://www.agoda.com${item.ResultUrl}` : null,
       });
     }
   }
@@ -198,6 +200,105 @@ function modeSuggest(apiKey) {
   }
 
   console.log(JSON.stringify({ candidates }, null, 2));
+}
+
+// — GraphQL: fetch property page path (e.g. "/jr-kyushu-hotel-blossom-shinjuku/hotel/tokyo-jp.html") —
+function getPropertyPagePath(propertyId, cityId, apiKey) {
+  const userId = crypto.randomUUID();
+  const body = {
+    operationName: 'citySearch',
+    variables: {
+      CitySearchRequest: {
+        cityId,
+        searchRequest: {
+          searchCriteria: {
+            isAllowBookOnRequest: false,
+            bookingDate: new Date().toISOString(),
+            checkInDate: `${checkin}T00:00:00.000Z`,
+            localCheckInDate: checkin,
+            los: 1, rooms, adults, children,
+            childAges: [], ratePlans: [],
+            featureFlagRequest: {
+              fetchNamesForTealium: false, fiveStarDealOfTheDay: false, isAllowBookOnRequest: false,
+              showUnAvailable: false, showRemainingProperties: false, isMultiHotelSearch: false,
+              enableAgencySupplyForPackages: false, flags: [], enablePageToken: false,
+              enableDealsOfTheDayFilter: false, isEnableSupplierFinancialInfo: false,
+              citySearchIgnoreRoomsCountForNha: false, isFlexibleMultiRoomSearch: false,
+              enableLuxuryHotelTSP: false,
+            },
+            isUserLoggedIn: false, currency,
+            travellerType: adults === 1 ? 'Solo' : 'Couple',
+            isAPSPeek: false, enableOpaqueChannel: false, isEnabledPartnerChannelSelection: null,
+            sorting: { sortField: 'Ranking', sortOrder: 'Desc', sortParams: null },
+            requiredBasis: 'PRPN', requiredPrice: 'Exclusive', suggestionLimit: 0, synchronous: false,
+            supplierPullMetadataRequest: null, isRoomSuggestionRequested: false,
+            isAPORequest: false, hasAPOFilter: false,
+          },
+          searchContext: {
+            userId, memberId: 0, locale: 'zh-tw', cid: -1, origin: 'TW', platform: 1, deviceTypeId: 1,
+            experiments: { forceByVariant: null, forceByExperiment: [] },
+            isRetry: false, showCMS: false, storeFrontId: 3, pageTypeId: 103,
+            whiteLabelKey: null, ipAddress: '', endpointSearchType: 'CitySearch',
+            trackSteps: null, searchId: crypto.randomUUID(),
+          },
+          matrix: null, matrixGroup: [],
+          filterRequest: { idsFilters: [], rangeFilters: [], textFilters: [] },
+          page: { pageSize: 1, pageNumber: 1, pageToken: '' },
+          apoRequest: { apoPageSize: 0 },
+          extraHotels: { extraHotelIds: [parseInt(propertyId, 10)], enableFiltersForExtraHotels: false },
+          rankingRequest: { isNhaKeywordSearch: false },
+        },
+      },
+      ContentSummaryRequest: {
+        context: {
+          rawUserId: userId, memberId: 0, userOrigin: 'TW', locale: 'zh-tw',
+          forceExperimentsByIdNew: [], apo: false,
+          searchCriteria: { cityId },
+          platform: { id: 1 }, storeFrontId: 3, cid: '-1',
+          occupancy: { numberOfAdults: adults, numberOfChildren: children, travelerType: 0, checkIn: `${checkin}T00:00:00.000Z` },
+          deviceTypeId: 1, whiteLabelKey: '', correlationId: '',
+        },
+        summary: { highlightedFeaturesOrderPriority: null, includeHotelCharacter: false },
+        reviews: { commentary: null, demographics: { providerIds: null, filter: { defaultProviderOnly: true } }, summaries: { providerIds: null, apo: false, limit: 0, travellerType: 0 }, cumulative: { providerIds: null }, filters: null },
+        images: { page: null, maxWidth: 0, maxHeight: 0, imageSizes: null, indexOffset: null },
+        rooms: { images: null, featureLimit: 0, filterCriteria: null, includeMissing: false, includeSoldOut: false, includeDmcRoomId: false, soldOutRoomCriteria: null, showRoomSize: false, showRoomFacilities: false, showRoomName: false },
+        nonHotelAccommodation: false, engagement: false,
+        highlights: { maxNumberOfItems: 0, images: { imageSizes: [] } },
+        personalizedInformation: false, localInformation: { images: null },
+        features: null, rateCategories: false, contentRateCategories: { escapeRateCategories: {} }, synopsis: false,
+      },
+    },
+    query: `query citySearch($CitySearchRequest: CitySearchRequest!, $ContentSummaryRequest: ContentSummaryRequest!) {
+  citySearch(CitySearchRequest: $CitySearchRequest) {
+    properties(ContentSummaryRequest: $ContentSummaryRequest) {
+      propertyId
+      content {
+        informationSummary {
+          propertyLinks { propertyPage }
+        }
+      }
+    }
+  }
+}`,
+  };
+
+  try {
+    const raw = execFileSync('curl', [
+      '-s', '--fail', '--compressed', '-X', 'POST',
+      '-H', 'Content-Type: application/json',
+      '-H', 'Referer: https://www.agoda.com/',
+      '-H', 'ag-page-type-id: 103',
+      ...buildHeaders(apiKey),
+      '--data', JSON.stringify(body),
+      'https://www.agoda.com/graphql/search',
+    ], { encoding: 'utf8', maxBuffer: 5 * 1024 * 1024 });
+    const data = JSON.parse(raw);
+    const props = data?.data?.citySearch?.properties || [];
+    const prop = props.find(p => String(p.propertyId) === String(propertyId));
+    return prop?.content?.informationSummary?.propertyLinks?.propertyPage || null;
+  } catch {
+    return null;
+  }
 }
 
 // — Mode 2: price —
@@ -249,6 +350,16 @@ function modePrice(apiKey) {
     process.exit(1);
   }
 
+  const cityId = data.cityId || 0;
+
+  // Calculate length of stay in nights
+  const los = Math.round((new Date(checkout) - new Date(checkin)) / (1000 * 60 * 60 * 24));
+
+  const propertyPage = cityId ? getPropertyPagePath(idArg, cityId, apiKey) : null;
+  const bookingUrl = propertyPage
+    ? `https://www.agoda.com/zh-tw${propertyPage}?checkIn=${checkin}&los=${los}&adults=${adults}&children=${children}&rooms=${rooms}&currencyCode=${currency}`
+    : null;
+
   const result = {
     propertyId: data.propertyId,
     hotelName: data.propertyName,
@@ -257,6 +368,7 @@ function modePrice(apiKey) {
       : data.searchCriteriaDescription,
     isSoldOut: data.isSoldOut,
     currency,
+    bookingUrl,
     rooms: [],
   };
 
