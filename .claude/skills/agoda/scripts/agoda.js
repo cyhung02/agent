@@ -5,15 +5,9 @@
 //   # Suggest (hotel name lookup)
 //   node agoda.js --name "JR九州Blossom新宿"
 //
-//   # Price (room prices via headed browser)
-//   node agoda.js \
-//     --id 621491 \
-//     --checkin 2026-06-01 \
-//     --checkout 2026-06-02 \
-//     --adults 2 \
-//     [--children 0] \
-//     [--rooms 1] \
-//     [--currency TWD]
+//   # Price — fetches regular + JCB in parallel automatically
+//   node agoda.js --id 621491 --checkin 2026-06-01 --checkout 2026-06-02 \
+//     --adults 2 [--children 0] [--rooms 1] [--currency TWD]
 //
 // Mode is auto-detected: --name → suggest, --id + --checkin + --checkout → price
 
@@ -48,7 +42,9 @@ const adults   = parseInt(get('--adults')   || '2', 10);
 const children = parseInt(get('--children') || '0', 10);
 const rooms    = parseInt(get('--rooms')    || '1', 10);
 const currency = (get('--currency') || 'TWD').toUpperCase();
-const cidFrom  = get('--cid-from') || '';
+
+// — Partner CID source (JCB TW) —
+const JCB_URL = 'https://www.agoda.com/zh-tw/jcbtw';
 
 // — API key: fetch from Agoda JS bundles —
 function _curlGetRaw(url) {
@@ -231,86 +227,84 @@ function getPropertySlug(cityId, apiKey) {
   }
 }
 
-function pw(...pwArgs) {
-  return execFileSync('playwright-cli', ['-s', 'agoda-price', ...pwArgs], {
-    encoding: 'utf8', maxBuffer: 10 * 1024 * 1024,
+// — Browser price extraction —
+function pwAsync(session, ...pwArgs) {
+  return new Promise((resolve, reject) => {
+    const child = spawn('playwright-cli', ['-s', session, ...pwArgs]);
+    let out = '', err = '';
+    child.stdout.on('data', d => out += d);
+    child.stderr.on('data', d => err += d);
+    child.on('close', code =>
+      code === 0 ? resolve(out) : reject(new Error(`[${session}] playwright-cli exit ${code}: ${err.slice(0, 200)}`))
+    );
   });
 }
 
-function getPricesViaBrowser(pageUrl) {
-  try { pw('close'); } catch {}
-
-  pw('open', '--headed', pageUrl);
-
-  // Wait until propertyPageParams.roomGridData is populated (server-rendered in HTML)
-  pw('eval', `(function() {
-    var deadline = Date.now() + 10000;
-    function check() {
-      var p = window.propertyPageParams;
-      if (p && p.roomGridData && p.roomGridData.masterRooms) return;
-      if (Date.now() < deadline) setTimeout(check, 200);
-    }
-    check();
-  })()`);
-
-  const evalScript = `(function() {
+const WAIT_SCRIPT = `(function() {
+  var deadline = Date.now() + 10000;
+  function check() {
     var p = window.propertyPageParams;
-    if (!p || !p.roomGridData) return JSON.stringify(null);
-    return JSON.stringify({
-      propertyId: p.hotelInfo && p.hotelInfo.hotelId,
-      hotelName: p.hotelInfo && p.hotelInfo.name,
-      currency: p.currencyInfo && p.currencyInfo.code,
-      isSoldOut: !(p.roomGridData.masterRooms && p.roomGridData.masterRooms.length),
-      rooms: (p.roomGridData.masterRooms || []).map(function(r) {
-        var sizeFeature = (r.features || []).find(function(f) { return f.symbol === 'ficon-sqm'; });
-        var size = sizeFeature ? sizeFeature.title.replace(/^客房面積：/, '') : null;
-        var beds = [];
-        (r.bedroomLayouts || []).forEach(function(layout) {
-          (layout.bedrooms || []).forEach(function(bedroom) {
-            (bedroom.beds || []).forEach(function(bed) {
-              if (bed.name) beds.push(bed.name);
-            });
+    if (p && p.roomGridData && p.roomGridData.masterRooms) return;
+    if (Date.now() < deadline) setTimeout(check, 200);
+  }
+  check();
+})()`;
+
+const EVAL_SCRIPT = `(function() {
+  var p = window.propertyPageParams;
+  if (!p || !p.roomGridData) return JSON.stringify(null);
+  return JSON.stringify({
+    propertyId: p.hotelInfo && p.hotelInfo.hotelId,
+    hotelName: p.hotelInfo && p.hotelInfo.name,
+    isSoldOut: !(p.roomGridData.masterRooms && p.roomGridData.masterRooms.length),
+    rooms: (p.roomGridData.masterRooms || []).map(function(r) {
+      var sizeFeature = (r.features || []).find(function(f) { return f.symbol === 'ficon-sqm'; });
+      var size = sizeFeature ? sizeFeature.title.replace(/^客房面積：/, '') : null;
+      var beds = [];
+      (r.bedroomLayouts || []).forEach(function(layout) {
+        (layout.bedrooms || []).forEach(function(bedroom) {
+          (bedroom.beds || []).forEach(function(bed) {
+            if (bed.name) beds.push(bed.name);
           });
         });
-        var offers = (r.rooms || []).filter(function(o) {
-          return o.isFit !== false;
-        }).map(function(o) {
-          var bens = (o.benefits || [])
-            .filter(function(b) { return b.isAvailable && b.title; })
-            .map(function(b) { return b.title; });
-          if (o.isFreeCancellation && o.cancellation && o.cancellation.title)
-            bens.push(o.cancellation.title);
-          if (o.payLater && o.payLater.isAvailable)
-            bens.push((o.payLater.hasDescription && o.payLater.description) || o.payLater.title);
-          var ds = o.pricing && o.pricing.displaySummary && o.pricing.displaySummary.perNight;
-          var afterCb = ds && ds.displayAfterCashback;
-          var apsVal = o.apsPeekViewModel && o.apsPeekViewModel.apsPriceValue;
-          var priceAmt = (apsVal && afterCb && afterCb.exclusive)
-            ? apsVal * (afterCb.allInclusive / afterCb.exclusive)
-            : (afterCb && afterCb.allInclusive)
-              || (ds && ds.chargeTotal && ds.chargeTotal.allInclusive)
-              || (o.pricing && o.pricing.displayPrice);
-          return {
-            price: { amount: Math.round(priceAmt) },
-            benefits: bens
-          };
-        }).filter(function(o) { return o.price.amount > 0; });
-        return { name: r.name, isSoldOut: offers.length === 0, size: size, beds: beds, offers: offers };
-      }).filter(function(r){ return r.offers.length > 0; })
-    });
-  })()`;
+      });
+      var offers = (r.rooms || []).filter(function(o) {
+        return o.isFit !== false;
+      }).map(function(o) {
+        var bens = (o.benefits || [])
+          .filter(function(b) { return b.isAvailable && b.title; })
+          .map(function(b) { return b.title; });
+        if (o.isFreeCancellation && o.cancellation && o.cancellation.title)
+          bens.push(o.cancellation.title);
+        if (o.payLater && o.payLater.isAvailable)
+          bens.push((o.payLater.hasDescription && o.payLater.description) || o.payLater.title);
+        var ds = o.pricing && o.pricing.displaySummary && o.pricing.displaySummary.perNight;
+        var afterCb = ds && ds.displayAfterCashback;
+        var apsVal = o.apsPeekViewModel && o.apsPeekViewModel.apsPriceValue;
+        var priceAmt = (apsVal && afterCb && afterCb.exclusive)
+          ? apsVal * (afterCb.allInclusive / afterCb.exclusive)
+          : (afterCb && afterCb.allInclusive)
+            || (ds && ds.chargeTotal && ds.chargeTotal.allInclusive)
+            || (o.pricing && o.pricing.displayPrice);
+        return { price: { amount: Math.round(priceAmt) }, benefits: bens };
+      }).filter(function(o) { return o.price.amount > 0; });
+      return { name: r.name, isSoldOut: offers.length === 0, size: size, beds: beds, offers: offers };
+    }).filter(function(r) { return r.offers.length > 0; })
+  });
+})()`;
 
-  let raw;
+async function getPricesViaBrowser(session, pageUrl) {
+  try { await pwAsync(session, 'close'); } catch {}
   try {
-    raw = pw('eval', evalScript);
+    await pwAsync(session, 'open', '--headed', pageUrl);
+    await pwAsync(session, 'eval', WAIT_SCRIPT);
+    const raw   = await pwAsync(session, 'eval', EVAL_SCRIPT);
+    const match = raw.match(/### Result\s*\n"([\s\S]*?)"\n/);
+    if (!match) throw new Error(`[${session}] unexpected eval output: ` + raw.slice(0, 200));
+    return JSON.parse(JSON.parse('"' + match[1] + '"'));
   } finally {
-    try { pw('close'); } catch {}
+    try { await pwAsync(session, 'close'); } catch {}
   }
-
-  // playwright-cli eval output: "### Result\n\"<json-string>\"\n..."
-  const match = raw.match(/### Result\s*\n"([\s\S]*?)"\n/);
-  if (!match) throw new Error('unexpected eval output: ' + raw.slice(0, 200));
-  return JSON.parse(JSON.parse('"' + match[1] + '"'));
 }
 
 async function modePrice(apiKey) {
@@ -326,40 +320,47 @@ async function modePrice(apiKey) {
     process.exit(1);
   }
 
-  // Resolve partner cid if requested
-  let cid = null;
-  if (cidFrom) {
-    process.stderr.write(`[agoda] fetching cid from ${cidFrom}...\n`);
-    cid = fetchCidFromUrl(cidFrom);
-    process.stderr.write(`[agoda] cid: ${cid}\n`);
-  }
-
-  process.stderr.write('[agoda] fetching hotel page url...\n');
-  const cityId = getCityId(apiKey);
+  process.stderr.write('[agoda] fetching hotel page url and JCB cid...\n');
+  const [cityId, jcbCid] = await Promise.all([
+    Promise.resolve(getCityId(apiKey)),
+    Promise.resolve(fetchCidFromUrl(JCB_URL)),
+  ]);
   if (!cityId) { console.error('Error: could not resolve cityId for property', idArg); process.exit(1); }
 
   const slug = getPropertySlug(cityId, apiKey);
   if (!slug) { console.error('Error: could not resolve page slug for property', idArg); process.exit(1); }
 
   const los        = Math.round((new Date(checkout) - new Date(checkin)) / (1000 * 60 * 60 * 24));
-  const cidSuffix  = cid ? `&cid=${cid}` : '';
-  const pageUrl    = `https://www.agoda.com/zh-tw${slug}?checkIn=${checkin}&los=${los}&adults=${adults}&children=${children}&rooms=${rooms}&currencyCode=${currency}${cidSuffix}`;
-  const bookingUrl = pageUrl;
+  const regularUrl = `https://www.agoda.com/zh-tw${slug}?checkIn=${checkin}&los=${los}&adults=${adults}&children=${children}&rooms=${rooms}&currencyCode=${currency}`;
+  const jcbUrl     = `${regularUrl}&cid=${jcbCid}`;
 
-  process.stderr.write('[agoda] launching browser...\n');
-  const data = getPricesViaBrowser(pageUrl);
-  if (!data) { console.error('Error: propertyPageParams not found on page'); process.exit(1); }
+  process.stderr.write(`[agoda] launching browsers in parallel (JCB cid: ${jcbCid})...\n`);
+
+  const [regularData, jcbData] = await Promise.all([
+    getPricesViaBrowser('agoda-regular', regularUrl),
+    getPricesViaBrowser('agoda-jcb',     jcbUrl),
+  ]);
+
+  if (!regularData) { console.error('Error: propertyPageParams not found (regular)'); process.exit(1); }
+  if (!jcbData)     { console.error('Error: propertyPageParams not found (JCB)');     process.exit(1); }
 
   const result = {
-    propertyId: data.propertyId || idArg,
-    hotelName:  data.hotelName,
+    propertyId:     regularData.propertyId || idArg,
+    hotelName:      regularData.hotelName,
     searchCriteria: rooms > 1
       ? `${checkin} - ${checkout}, ${adults}人, ${rooms}間客房`
       : `${checkin} - ${checkout}, ${adults}人`,
-    isSoldOut: data.isSoldOut,
     currency,
-    bookingUrl,
-    rooms: data.rooms,
+    regular: {
+      isSoldOut:  regularData.isSoldOut,
+      bookingUrl: regularUrl,
+      rooms:      regularData.rooms,
+    },
+    jcb: {
+      isSoldOut:  jcbData.isSoldOut,
+      bookingUrl: jcbUrl,
+      rooms:      jcbData.rooms,
+    },
   };
 
   console.log(JSON.stringify(result, null, 2));
@@ -376,9 +377,9 @@ async function main() {
   } else {
     console.error(
       'Usage:\n' +
-      '  node agoda.js --name "hotel name"                                        # suggest\n' +
-      '  node agoda.js --id ID --checkin YYYY-MM-DD --checkout YYYY-MM-DD \\      # price\n' +
-      '    [--adults N] [--currency TWD] [--cid-from https://www.agoda.com/...]'
+      '  node agoda.js --name "hotel name"                                    # suggest\n' +
+      '  node agoda.js --id ID --checkin YYYY-MM-DD --checkout YYYY-MM-DD \\  # price\n' +
+      '    [--adults N] [--currency TWD]'
     );
     process.exit(1);
   }
