@@ -45,8 +45,9 @@ const currency = (get('--currency') || 'TWD').toUpperCase();
 
 // — Partners: add entries here to include more partner price comparisons —
 const PARTNERS = [
-  { key: 'regular', url: 'https://www.agoda.com/zh-tw' },
-  { key: 'jcb',     url: 'https://www.agoda.com/zh-tw/jcbtw' },
+  { key: 'regular',          url: 'https://www.agoda.com/zh-tw' },
+  { key: 'jcb',              url: 'https://www.agoda.com/zh-tw/jcbtw' },
+  { key: 'mctaishinbusiness', url: 'https://www.agoda.com/zh-tw/mctaishinbusiness' },
 ];
 
 // — API key: fetch from Agoda JS bundles —
