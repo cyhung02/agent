@@ -49,24 +49,9 @@ If genuinely ambiguous, present the top candidates and ask the user to confirm.
 
 ## Step 2 — Prerequisite: `playwright-cli` (headed browser)
 
-`agoda_price.js` uses a headed (visible) browser via `playwright-cli`. Agoda actively blocks headless browsers, so this is a hard requirement.
+`agoda_price.js` requires `playwright-cli` running in **headed mode**. Agoda actively blocks headless browsers.
 
-Before running the price script, verify `playwright-cli` is installed:
-
-```bash
-playwright-cli --version
-```
-
-If the command is not found, install it using the **playwright-cli** skill:
-
-```bash
-# Resolve install script path via find-skill-script, then:
-bash <path-to-install-playwright-cli.sh>
-cp <path-to-cli.config.json> ~/.playwright/cli.config.json
-bash <path-to-update-playwright-proxy.sh>
-```
-
-The script itself will also exit with a clear error if `playwright-cli` is missing.
+If `playwright-cli` is not installed or not working, follow the **playwright-cli** skill to set it up. The script will also exit with a clear error if `playwright-cli` is missing.
 
 ---
 
