@@ -48,6 +48,7 @@ const adults   = parseInt(get('--adults')   || '2', 10);
 const children = parseInt(get('--children') || '0', 10);
 const rooms    = parseInt(get('--rooms')    || '1', 10);
 const currency = (get('--currency') || 'TWD').toUpperCase();
+const cidFrom  = get('--cid-from') || '';
 
 // — API key: fetch from Agoda JS bundles —
 function _curlGetRaw(url) {
@@ -99,6 +100,14 @@ async function getApiKey() {
   const key = await _fetchApiKey();
   fs.writeFileSync(KEY_CACHE_PATH, JSON.stringify({ key, fetchedAt: Date.now() }));
   return key;
+}
+
+// — CID: fetch from partner landing page —
+function fetchCidFromUrl(url) {
+  const html = _curlGetRaw(url);
+  const m = html.match(/"cid":(\d+)/);
+  if (!m) throw new Error(`cid not found in page: ${url}`);
+  return parseInt(m[1], 10);
 }
 
 // — curl helpers —
@@ -317,6 +326,14 @@ async function modePrice(apiKey) {
     process.exit(1);
   }
 
+  // Resolve partner cid if requested
+  let cid = null;
+  if (cidFrom) {
+    process.stderr.write(`[agoda] fetching cid from ${cidFrom}...\n`);
+    cid = fetchCidFromUrl(cidFrom);
+    process.stderr.write(`[agoda] cid: ${cid}\n`);
+  }
+
   process.stderr.write('[agoda] fetching hotel page url...\n');
   const cityId = getCityId(apiKey);
   if (!cityId) { console.error('Error: could not resolve cityId for property', idArg); process.exit(1); }
@@ -324,8 +341,9 @@ async function modePrice(apiKey) {
   const slug = getPropertySlug(cityId, apiKey);
   if (!slug) { console.error('Error: could not resolve page slug for property', idArg); process.exit(1); }
 
-  const los      = Math.round((new Date(checkout) - new Date(checkin)) / (1000 * 60 * 60 * 24));
-  const pageUrl  = `https://www.agoda.com/zh-tw${slug}?checkIn=${checkin}&los=${los}&adults=${adults}&children=${children}&rooms=${rooms}&currencyCode=${currency}`;
+  const los        = Math.round((new Date(checkout) - new Date(checkin)) / (1000 * 60 * 60 * 24));
+  const cidSuffix  = cid ? `&cid=${cid}` : '';
+  const pageUrl    = `https://www.agoda.com/zh-tw${slug}?checkIn=${checkin}&los=${los}&adults=${adults}&children=${children}&rooms=${rooms}&currencyCode=${currency}${cidSuffix}`;
   const bookingUrl = pageUrl;
 
   process.stderr.write('[agoda] launching browser...\n');
@@ -358,8 +376,9 @@ async function main() {
   } else {
     console.error(
       'Usage:\n' +
-      '  node agoda.js --name "hotel name"                          # suggest\n' +
-      '  node agoda.js --id ID --checkin YYYY-MM-DD --checkout YYYY-MM-DD [--adults N] [--currency TWD]  # price'
+      '  node agoda.js --name "hotel name"                                        # suggest\n' +
+      '  node agoda.js --id ID --checkin YYYY-MM-DD --checkout YYYY-MM-DD \\      # price\n' +
+      '    [--adults N] [--currency TWD] [--cid-from https://www.agoda.com/...]'
     );
     process.exit(1);
   }
