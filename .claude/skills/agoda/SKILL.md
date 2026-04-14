@@ -89,25 +89,33 @@ node <agoda.js path> \
 | `AUD` | 澳幣 |
 | `GBP` | 英鎊 |
 
+The script automatically fetches prices from all configured partners (defined in the `PARTNERS` array in the script) in parallel and consolidates the results.
+
 Returns JSON:
 ```json
 {
   "propertyId": "621491",
   "hotelName": "新宿JR九州飯店 (JR Kyushu Hotel Blossom Shinjuku)",
   "searchCriteria": "2026-06-01 - 2026-06-02, 2人",
-  "isSoldOut": false,
   "currency": "TWD",
-  "bookingUrl": "https://www.agoda.com/zh-tw/jr-kyushu-hotel-blossom-shinjuku/hotel/tokyo-jp.html?checkIn=2026-06-01&los=1&adults=2&children=0&rooms=1&currencyCode=TWD",
+  "bookingUrls": {
+    "regular": "https://www.agoda.com/zh-tw/...&cid=-1",
+    "jcb": "https://www.agoda.com/zh-tw/...&cid=1926014",
+    "mctaishinbusiness": "https://www.agoda.com/zh-tw/...&cid=1897427"
+  },
   "rooms": [
     {
       "name": "大床標準雙人間- 禁煙 (Standard Double Room with Queen Bed - Non-Smoking)",
-      "isSoldOut": false,
       "size": "19平方公尺/205平方英尺",
       "beds": ["1張大床"],
       "offers": [
         {
-          "price": { "amount": 5955 },
-          "benefits": ["免費Wi-Fi", "2026年5月27日 星期三前可免費取消。", "2026年5月25日 星期一前無須付款"]
+          "benefits": ["免費Wi-Fi", "2026年5月27日 星期三前可免費取消。", "2026年5月25日 星期一前無須付款"],
+          "prices": {
+            "regular": 7829,
+            "jcb": 7483,
+            "mctaishinbusiness": 7672
+          }
         }
       ]
     }
@@ -115,13 +123,17 @@ Returns JSON:
 }
 ```
 
+**Top-level fields:**
+- `bookingUrls` — one booking URL per partner; use the partner key to look up the URL when presenting links to the user
+- `rooms` — consolidated list of room types across all partners
+
 **Room fields:**
 - `size` — room size string (may be `null` if unavailable)
 - `beds` — bed configuration(s) (e.g. `["1張大床"]`, `["2張單人床"]`); empty array if unavailable
 
 **Offer fields:**
-- `price.amount` — display price per night, rounded; currency indicated by top-level `currency` field
-- `benefits` — available amenities, free cancellation deadline (if applicable), and pay-later info
+- `benefits` — amenities, free cancellation deadline (if applicable), and pay-later info
+- `prices` — price per night (rounded, in `currency`) for each partner that has this offer; a partner key is absent if that partner does not offer this benefit combination
 
 ---
 
@@ -131,10 +143,8 @@ When presenting room prices to the user:
 
 1. Show hotel name, search criteria (dates, guests, rooms).
 2. For each room type, show: room name, bed type (`beds`), size (if available), and all offers.
-3. For each offer, show: price (`price.amount` + top-level `currency`), and key benefits.
-4. If `isSoldOut` is `true` at the hotel level, inform the user the property is fully booked.
-5. If a specific room `isSoldOut` is `true`, note it is unavailable.
-6. If `bookingUrl` is present (non-null), show it as a clickable link so the user can proceed to book on Agoda.
+3. For each offer, show: the benefits, then the price for each partner side by side.
+4. For each partner, link its name to the corresponding URL in `bookingUrls` so the user can proceed to book.
 
 ---
 
@@ -142,7 +152,7 @@ When presenting room prices to the user:
 
 > **Never fabricate hotel URLs, propertyIds, or prices.**
 >
-> All data must come directly from the script output. Do not guess or reconstruct URLs or property IDs from memory. The `bookingUrl` in the price result is constructed by the script from real API data — always use it as-is, never modify it.
+> All data must come directly from the script output. Do not guess or reconstruct URLs or property IDs from memory. The URLs in `bookingUrls` are constructed by the script from real API data — always use them as-is, never modify them.
 
 > **If the hotel is not found in suggest results, say so clearly.**
 >
