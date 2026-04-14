@@ -47,7 +47,30 @@ If genuinely ambiguous, present the top candidates and ask the user to confirm.
 
 ---
 
-## Step 2 — Get Room Prices: `agoda_price.js`
+## Step 2 — Prerequisite: `playwright-cli` (headed browser)
+
+`agoda_price.js` uses a headed (visible) browser via `playwright-cli`. Agoda actively blocks headless browsers, so this is a hard requirement.
+
+Before running the price script, verify `playwright-cli` is installed:
+
+```bash
+playwright-cli --version
+```
+
+If the command is not found, install it using the **playwright-cli** skill:
+
+```bash
+# Resolve install script path via find-skill-script, then:
+bash <path-to-install-playwright-cli.sh>
+cp <path-to-cli.config.json> ~/.playwright/cli.config.json
+bash <path-to-update-playwright-proxy.sh>
+```
+
+The script itself will also exit with a clear error if `playwright-cli` is missing.
+
+---
+
+## Step 3 — Get Room Prices: `agoda_price.js`
 
 ```bash
 node <agoda_price.js path> \
@@ -104,7 +127,7 @@ Returns JSON:
       "offers": [
         {
           "price": { "amount": 5955 },
-          "benefits": ["免費Wi-Fi", "2026年5月27日 星期三前可免費取消。", "Agoda可延後扣款"]
+          "benefits": ["免費Wi-Fi", "2026年5月27日 星期三前可免費取消。", "2026年5月25日 星期一前無須付款"]
         }
       ]
     }

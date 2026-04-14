@@ -268,6 +268,18 @@ async function main() {
   if (!checkin)  { console.error('Error: --checkin is required'); process.exit(1); }
   if (!checkout) { console.error('Error: --checkout is required'); process.exit(1); }
 
+  // Check playwright-cli is available (required for headed browser; Agoda blocks headless)
+  try {
+    execFileSync('playwright-cli', ['--version'], { stdio: 'ignore' });
+  } catch {
+    console.error(
+      'Error: playwright-cli not found.\n' +
+      'This script requires a headed browser — Agoda blocks headless mode.\n' +
+      'Install playwright-cli via the playwright-cli skill install script.'
+    );
+    process.exit(1);
+  }
+
   const apiKey = await getApiKey();
 
   process.stderr.write('[agoda] fetching hotel page url...\n');
