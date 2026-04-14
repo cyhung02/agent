@@ -311,6 +311,54 @@ async function getPricesViaBrowser(session, pageUrl) {
   }
 }
 
+// — Consolidate results from all partners —
+function consolidate(entries, dataArr) {
+  // bookingUrls: one per partner
+  const bookingUrls = {};
+  entries.forEach((e, i) => { bookingUrls[e.key] = e.url; });
+
+  // Collect room names in order of first appearance across all partners
+  const roomOrder = [];
+  const roomSeen  = new Set();
+  dataArr.forEach(d => {
+    (d.rooms || []).forEach(r => {
+      if (!roomSeen.has(r.name)) { roomSeen.add(r.name); roomOrder.push(r.name); }
+    });
+  });
+
+  const rooms = roomOrder.map(roomName => {
+    // Room metadata from first partner that has it
+    let meta = null;
+    for (const d of dataArr) {
+      const r = (d.rooms || []).find(r => r.name === roomName);
+      if (r) { meta = r; break; }
+    }
+
+    // Group offers by sorted benefits key; keep lowest price per partner
+    const offerMap = new Map();
+    entries.forEach((e, i) => {
+      const room = (dataArr[i].rooms || []).find(r => r.name === roomName);
+      if (!room) return;
+      (room.offers || []).forEach(offer => {
+        const key = JSON.stringify([...offer.benefits].sort());
+        if (!offerMap.has(key)) offerMap.set(key, { benefits: offer.benefits, prices: {} });
+        const slot = offerMap.get(key);
+        if (!(e.key in slot.prices) || offer.price.amount < slot.prices[e.key])
+          slot.prices[e.key] = offer.price.amount;
+      });
+    });
+
+    return {
+      name: meta.name,
+      size: meta.size,
+      beds: meta.beds,
+      offers: [...offerMap.values()],
+    };
+  }).filter(r => r.offers.length > 0);
+
+  return { bookingUrls, rooms };
+}
+
 async function modePrice(apiKey) {
   // Check playwright-cli is available (required for headed browser; Agoda blocks headless)
   try {
@@ -349,7 +397,9 @@ async function modePrice(apiKey) {
     if (!d) { console.error(`Error: propertyPageParams not found (${PARTNERS[i].key})`); process.exit(1); }
   });
 
-  const first  = dataArr[0];
+  const first      = dataArr[0];
+  const { bookingUrls, rooms: consolidatedRooms } = consolidate(entries, dataArr);
+
   const result = {
     propertyId:     first.propertyId || idArg,
     hotelName:      first.hotelName,
@@ -357,15 +407,9 @@ async function modePrice(apiKey) {
       ? `${checkin} - ${checkout}, ${adults}人, ${rooms}間客房`
       : `${checkin} - ${checkout}, ${adults}人`,
     currency,
+    bookingUrls,
+    rooms: consolidatedRooms,
   };
-
-  entries.forEach((e, i) => {
-    result[e.key] = {
-      isSoldOut:  dataArr[i].isSoldOut,
-      bookingUrl: e.url,
-      rooms:      dataArr[i].rooms,
-    };
-  });
 
   console.log(JSON.stringify(result, null, 2));
 }
