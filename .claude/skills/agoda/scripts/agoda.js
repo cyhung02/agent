@@ -1,8 +1,12 @@
 #!/usr/bin/env node
-// agoda_price.js — Get room prices via playwright headed browser
+// agoda.js — Agoda hotel search and room price lookup
 //
 // Usage:
-//   node agoda_price.js \
+//   # Suggest (hotel name lookup)
+//   node agoda.js --name "JR九州Blossom新宿"
+//
+//   # Price (room prices via headed browser)
+//   node agoda.js \
 //     --id 621491 \
 //     --checkin 2026-06-01 \
 //     --checkout 2026-06-02 \
@@ -11,11 +15,7 @@
 //     [--rooms 1] \
 //     [--currency TWD]
 //
-// Flow:
-//   1. room-grid (no session) → cityId
-//   2. graphql/search (extraHotels) → slug URL
-//   3. playwright headed → open hotel page → read window.propertyPageParams
-//   4. Output structured JSON
+// Mode is auto-detected: --name → suggest, --id + --checkin + --checkout → price
 
 'use strict';
 
@@ -25,19 +25,22 @@ const fs   = require('fs');
 const os   = require('os');
 const path = require('path');
 
-// — Shared key-cache config (same as agoda_search.js) —
+// — Key cache config —
 const KEY_CACHE_PATH = path.join(os.tmpdir(), 'agoda_apikey.json');
-const KEY_TTL_MS     = 6 * 60 * 60 * 1000;
-const HOTEL_PAGE     = 'https://www.agoda.com/hotel-gracery-shinjuku/hotel/tokyo-jp.html';
-const CDN_BASE       = 'https://cdn6.agoda.net/cdn-accom-web/js/assets/browser-bundle/';
-const FETCH_UA       = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
-const KEY_RE         = /appVersion:"[^"]+",isWebviewEnabled[^,]+,apiKey:"([^"]+)"/;
-const TAIL_SIZE      = 512;
+const KEY_TTL_MS     = 6 * 60 * 60 * 1000; // 6 hours
 
-// — Arg parsing —
-const args  = process.argv.slice(2);
-const get   = (flag) => { const i = args.indexOf(flag); return i !== -1 ? args[i + 1] : null; };
+// — Key fetch constants —
+const HOTEL_PAGE = 'https://www.agoda.com/hotel-gracery-shinjuku/hotel/tokyo-jp.html';
+const CDN_BASE   = 'https://cdn6.agoda.net/cdn-accom-web/js/assets/browser-bundle/';
+const FETCH_UA   = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
+const KEY_RE     = /appVersion:"[^"]+",isWebviewEnabled[^,]+,apiKey:"([^"]+)"/;
+const TAIL_SIZE  = 512;
 
+// — Argument parsing —
+const args = process.argv.slice(2);
+const get  = (flag) => { const i = args.indexOf(flag); return i !== -1 ? args[i + 1] : null; };
+
+const nameArg  = get('--name')     || '';
 const idArg    = get('--id')       || '';
 const checkin  = get('--checkin')  || '';
 const checkout = get('--checkout') || '';
@@ -46,7 +49,7 @@ const children = parseInt(get('--children') || '0', 10);
 const rooms    = parseInt(get('--rooms')    || '1', 10);
 const currency = (get('--currency') || 'TWD').toUpperCase();
 
-// — API key (identical to agoda_search.js) —
+// — API key: fetch from Agoda JS bundles —
 function _curlGetRaw(url) {
   return execFileSync('curl', [
     '-s', '--fail', '--compressed', '-H', `User-Agent: ${FETCH_UA}`, url,
@@ -58,8 +61,8 @@ function _fetchApiKey() {
   const propMatch = html.match(/(property-[a-f0-9]+\.js)/);
   if (!propMatch) throw new Error('property-*.js bundle not found in HTML');
 
-  const propJs    = _curlGetRaw(CDN_BASE + propMatch[1]);
-  const pairs     = [...propJs.matchAll(/([0-9]+):"([a-f0-9]{4,})"/g)];
+  const propJs = _curlGetRaw(CDN_BASE + propMatch[1]);
+  const pairs  = [...propJs.matchAll(/([0-9]+):"([a-f0-9]{4,})"/g)];
   if (!pairs.length) throw new Error('chunk map not found in property bundle');
 
   const chunkUrls  = pairs.map(([, id, hash]) => `${CDN_BASE}${id}-${hash}.js`);
@@ -98,6 +101,7 @@ async function getApiKey() {
   return key;
 }
 
+// — curl helpers —
 function buildHeaders(apiKey) {
   return [
     '-H', `User-Agent: ${FETCH_UA}`,
@@ -112,6 +116,15 @@ function buildHeaders(apiKey) {
   ];
 }
 
+function curlGet(url, apiKey) {
+  const raw = execFileSync('curl', [
+    '-s', '--fail', '--compressed',
+    '-H', 'Referer: https://www.agoda.com/',
+    ...buildHeaders(apiKey), url,
+  ], { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 });
+  return JSON.parse(raw);
+}
+
 function curlPost(url, body, referer, apiKey) {
   const raw = execFileSync('curl', [
     '-s', '--fail', '--compressed', '-X', 'POST',
@@ -124,7 +137,40 @@ function curlPost(url, body, referer, apiKey) {
   return JSON.parse(raw);
 }
 
-// — Step 1: Get cityId from room-grid (no session needed, metadata only) —
+// — Suggest mode —
+function modeSuggest(apiKey) {
+  const url = `https://www.agoda.com/api/cronos/search/GetUnifiedSuggestResult/3/20/20/0/zh-tw/?searchText=${encodeURIComponent(nameArg)}&isHotelSearch=true`;
+
+  let data;
+  try {
+    data = curlGet(url, apiKey);
+  } catch (e) {
+    console.error('Error fetching suggestions:', e.message);
+    process.exit(1);
+  }
+
+  const candidates = [];
+  for (const item of (data?.ViewModelList || [])) {
+    if (!item.ObjectId) continue;
+    if (item.ObjectTypeId === 1 || item.IsHotel) {
+      candidates.push({
+        propertyId: item.ObjectId,
+        name: item.Name || item.Header || '',
+        city: item.CityName || '',
+        country: item.ResultAddress || '',
+      });
+    }
+  }
+
+  if (candidates.length === 0) {
+    console.error('No hotel candidates found for:', nameArg);
+    process.exit(1);
+  }
+
+  console.log(JSON.stringify({ candidates }, null, 2));
+}
+
+// — Price mode —
 function getCityId(apiKey) {
   const body = {
     pageSessionId: '', clientApplicationName: 'capybara', pricingRequest: {},
@@ -134,16 +180,14 @@ function getCityId(apiKey) {
     fields: ['rateCategory'],
     searchCriteria: { checkIn: checkin, checkOut: checkout, rooms, adults, children },
   };
-  const referer = `https://www.agoda.com/hotel/tokyo-jp.html`;
   try {
-    const data = curlPost('https://www.agoda.com/api/v1/property/room-grid', body, referer, apiKey);
+    const data = curlPost('https://www.agoda.com/api/v1/property/room-grid', body, 'https://www.agoda.com/hotel/tokyo-jp.html', apiKey);
     return data.cityId || 0;
   } catch {
     return 0;
   }
 }
 
-// — Step 2: Get hotel slug via graphql/search extraHotels —
 function getPropertySlug(cityId, apiKey) {
   const userId = crypto.randomUUID();
   const body = {
@@ -178,15 +222,13 @@ function getPropertySlug(cityId, apiKey) {
   }
 }
 
-// — Step 3: Open hotel page with playwright and read propertyPageParams —
-function pw(...args) {
-  return execFileSync('playwright-cli', ['-s', 'agoda-price', ...args], {
+function pw(...pwArgs) {
+  return execFileSync('playwright-cli', ['-s', 'agoda-price', ...pwArgs], {
     encoding: 'utf8', maxBuffer: 10 * 1024 * 1024,
   });
 }
 
 function getPricesViaBrowser(pageUrl) {
-  // Close any leftover session
   try { pw('close'); } catch {}
 
   pw('open', '--headed', pageUrl);
@@ -262,12 +304,7 @@ function getPricesViaBrowser(pageUrl) {
   return JSON.parse(JSON.parse('"' + match[1] + '"'));
 }
 
-// — Main —
-async function main() {
-  if (!idArg)    { console.error('Error: --id is required');      process.exit(1); }
-  if (!checkin)  { console.error('Error: --checkin is required'); process.exit(1); }
-  if (!checkout) { console.error('Error: --checkout is required'); process.exit(1); }
-
+async function modePrice(apiKey) {
   // Check playwright-cli is available (required for headed browser; Agoda blocks headless)
   try {
     execFileSync('playwright-cli', ['--version'], { stdio: 'ignore' });
@@ -280,8 +317,6 @@ async function main() {
     process.exit(1);
   }
 
-  const apiKey = await getApiKey();
-
   process.stderr.write('[agoda] fetching hotel page url...\n');
   const cityId = getCityId(apiKey);
   if (!cityId) { console.error('Error: could not resolve cityId for property', idArg); process.exit(1); }
@@ -289,13 +324,12 @@ async function main() {
   const slug = getPropertySlug(cityId, apiKey);
   if (!slug) { console.error('Error: could not resolve page slug for property', idArg); process.exit(1); }
 
-  const los     = Math.round((new Date(checkout) - new Date(checkin)) / (1000 * 60 * 60 * 24));
-  const pageUrl = `https://www.agoda.com/zh-tw${slug}?checkIn=${checkin}&los=${los}&adults=${adults}&children=${children}&rooms=${rooms}&currencyCode=${currency}`;
-  const bookingUrl = `https://www.agoda.com/zh-tw${slug}?checkIn=${checkin}&los=${los}&adults=${adults}&children=${children}&rooms=${rooms}&currencyCode=${currency}`;
+  const los      = Math.round((new Date(checkout) - new Date(checkin)) / (1000 * 60 * 60 * 24));
+  const pageUrl  = `https://www.agoda.com/zh-tw${slug}?checkIn=${checkin}&los=${los}&adults=${adults}&children=${children}&rooms=${rooms}&currencyCode=${currency}`;
+  const bookingUrl = pageUrl;
 
   process.stderr.write('[agoda] launching browser...\n');
   const data = getPricesViaBrowser(pageUrl);
-
   if (!data) { console.error('Error: propertyPageParams not found on page'); process.exit(1); }
 
   const result = {
@@ -311,6 +345,24 @@ async function main() {
   };
 
   console.log(JSON.stringify(result, null, 2));
+}
+
+// — Main —
+async function main() {
+  if (nameArg) {
+    const apiKey = await getApiKey();
+    modeSuggest(apiKey);
+  } else if (idArg && checkin && checkout) {
+    const apiKey = await getApiKey();
+    await modePrice(apiKey);
+  } else {
+    console.error(
+      'Usage:\n' +
+      '  node agoda.js --name "hotel name"                          # suggest\n' +
+      '  node agoda.js --id ID --checkin YYYY-MM-DD --checkout YYYY-MM-DD [--adults N] [--currency TWD]  # price'
+    );
+    process.exit(1);
+  }
 }
 
 main().catch((err) => {

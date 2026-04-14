@@ -6,25 +6,20 @@ allowed-tools: Bash
 
 # Agoda Hotel Search Skill
 
-Two scripts work together: `agoda_search.js` (hotel lookup) and `agoda_price.js` (room prices via headed browser).
+A single script `agoda.js` handles both hotel lookup and room prices. Mode is auto-detected from arguments.
 
-## Step 0 — Locate the Scripts
+## Step 0 — Locate the Script
 
-Before running any commands, use the **find-skill-script** skill to resolve the absolute paths of both scripts under the `scripts/` subdirectory:
+Before running any commands, use the **find-skill-script** skill to resolve the absolute path of `agoda.js` under the `scripts/` subdirectory.
 
-- `agoda_search.js`
-- `agoda_price.js`
-
-Use the returned absolute paths in all subsequent `node` commands.
+Use the returned absolute path in all subsequent `node` commands.
 
 ---
 
-## Step 1 — Find the Hotel: `agoda_search.js`
+## Step 1 — Find the Hotel
 
 ```bash
-node <agoda_search.js path> \
-  --mode suggest \
-  --name "JR九州Blossom新宿"
+node <agoda.js path> --name "JR九州Blossom新宿"
 ```
 
 Returns JSON:
@@ -49,16 +44,16 @@ If genuinely ambiguous, present the top candidates and ask the user to confirm.
 
 ## Step 2 — Prerequisite: `playwright-cli` (headed browser)
 
-`agoda_price.js` requires `playwright-cli` and launches the browser in **headed mode** (passes `--headed` to `playwright-cli open`). Agoda actively blocks headless browsers.
+The price lookup requires `playwright-cli` and launches the browser in **headed mode** (passes `--headed` to `playwright-cli open`). Agoda actively blocks headless browsers.
 
 If `playwright-cli` is not installed or not working, follow the **playwright-cli** skill to set it up. The script will also exit with a clear error if `playwright-cli` is missing.
 
 ---
 
-## Step 3 — Get Room Prices: `agoda_price.js`
+## Step 3 — Get Room Prices
 
 ```bash
-node <agoda_price.js path> \
+node <agoda.js path> \
   --id 621491 \
   --checkin 2026-06-01 \
   --checkout 2026-06-02 \
@@ -151,4 +146,4 @@ When presenting room prices to the user:
 
 > **If the hotel is not found in suggest results, say so clearly.**
 >
-> Do not attempt to pass an unverified ID to the price script. Always confirm the property via `agoda_search.js` suggest first.
+> Do not attempt to pass an unverified ID to the price script. Always confirm the property via suggest first.
