@@ -203,6 +203,7 @@ function getPricesViaBrowser(pageUrl) {
   })()`);
 
   const evalScript = `(function() {
+    var adults = ${adults};
     var p = window.propertyPageParams;
     if (!p || !p.roomGridData) return JSON.stringify(null);
     return JSON.stringify({
@@ -221,14 +222,16 @@ function getPricesViaBrowser(pageUrl) {
             });
           });
         });
-        var offers = (r.rooms || []).map(function(o) {
+        var offers = (r.rooms || []).filter(function(o) {
+          return !o.occupancy || o.occupancy >= adults;
+        }).map(function(o) {
           var bens = (o.benefits || [])
             .filter(function(b) { return b.isAvailable && b.title; })
             .map(function(b) { return b.title; });
           if (o.isFreeCancellation && o.cancellation && o.cancellation.title)
             bens.push(o.cancellation.title);
-          if (o.payLater && o.payLater.isAvailable && o.payLater.title)
-            bens.push(o.payLater.title);
+          if (o.payLater && o.payLater.isAvailable)
+            bens.push((o.payLater.hasDescription && o.payLater.description) || o.payLater.title);
           var ds = o.pricing && o.pricing.displaySummary && o.pricing.displaySummary.perNight;
           var afterCb = ds && ds.displayAfterCashback;
           var apsVal = o.apsPeekViewModel && o.apsPeekViewModel.apsPriceValue;
