@@ -49,7 +49,7 @@ If genuinely ambiguous, present the top candidates and ask the user to confirm.
 
 ## Step 2 — Prerequisite: `playwright-cli` (headed browser)
 
-`agoda_price.js` requires `playwright-cli` running in **headed mode**. Agoda actively blocks headless browsers.
+`agoda_price.js` requires `playwright-cli` and launches the browser in **headed mode** (passes `--headed` to `playwright-cli open`). Agoda actively blocks headless browsers.
 
 If `playwright-cli` is not installed or not working, follow the **playwright-cli** skill to set it up. The script will also exit with a clear error if `playwright-cli` is missing.
 

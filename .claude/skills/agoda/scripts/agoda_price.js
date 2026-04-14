@@ -189,7 +189,7 @@ function getPricesViaBrowser(pageUrl) {
   // Close any leftover session
   try { pw('close'); } catch {}
 
-  pw('open', pageUrl);
+  pw('open', '--headed', pageUrl);
 
   // Wait until propertyPageParams.roomGridData is populated (server-rendered in HTML)
   pw('eval', `(function() {
