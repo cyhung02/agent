@@ -5,7 +5,7 @@
 //   # Suggest (hotel name lookup)
 //   node agoda.js --name "JR九州Blossom新宿"
 //
-//   # Price — fetches regular + JCB in parallel automatically
+//   # Price — fetches regular + partners in parallel automatically
 //   node agoda.js --id 621491 --checkin 2026-06-01 --checkout 2026-06-02 \
 //     --adults 2 [--children 0] [--rooms 1] [--currency TWD]
 //
