@@ -45,7 +45,8 @@ const currency = (get('--currency') || 'TWD').toUpperCase();
 
 // — Partners: add entries here to include more partner price comparisons —
 const PARTNERS = [
-  { key: 'jcb', url: 'https://www.agoda.com/zh-tw/jcbtw' },
+  { key: 'regular', url: 'https://www.agoda.com/zh-tw' },
+  { key: 'jcb',     url: 'https://www.agoda.com/zh-tw/jcbtw' },
 ];
 
 // — API key: fetch from Agoda JS bundles —
@@ -103,7 +104,7 @@ async function getApiKey() {
 // — CID: fetch from partner landing page —
 function fetchCidFromUrl(url) {
   const html = _curlGetRaw(url);
-  const m = html.match(/"cid":(\d+)/);
+  const m = html.match(/"cid":(-?\d+)/);
   if (!m) throw new Error(`cid not found in page: ${url}`);
   return parseInt(m[1], 10);
 }
@@ -332,42 +333,36 @@ async function modePrice(apiKey) {
   const slug = getPropertySlug(cityId, apiKey);
   if (!slug) { console.error('Error: could not resolve page slug for property', idArg); process.exit(1); }
 
-  const los        = Math.round((new Date(checkout) - new Date(checkin)) / (1000 * 60 * 60 * 24));
-  const regularUrl = `https://www.agoda.com/zh-tw${slug}?checkIn=${checkin}&los=${los}&adults=${adults}&children=${children}&rooms=${rooms}&currencyCode=${currency}`;
-  const partnerUrls = PARTNERS.map((p, i) => ({ key: p.key, url: `${regularUrl}&cid=${partnerCids[i]}` }));
+  const los      = Math.round((new Date(checkout) - new Date(checkin)) / (1000 * 60 * 60 * 24));
+  const baseUrl  = `https://www.agoda.com/zh-tw${slug}?checkIn=${checkin}&los=${los}&adults=${adults}&children=${children}&rooms=${rooms}&currencyCode=${currency}`;
+  const entries  = PARTNERS.map((p, i) => ({ key: p.key, url: `${baseUrl}&cid=${partnerCids[i]}` }));
 
   const cidLog = PARTNERS.map((p, i) => `${p.key}=${partnerCids[i]}`).join(', ');
   process.stderr.write(`[agoda] launching browsers in parallel (${cidLog})...\n`);
 
-  const [regularData, ...partnerDataArr] = await Promise.all([
-    getPricesViaBrowser('agoda-regular', regularUrl),
-    ...partnerUrls.map(p => getPricesViaBrowser(`agoda-${p.key}`, p.url)),
-  ]);
+  const dataArr = await Promise.all(
+    entries.map(e => getPricesViaBrowser(`agoda-${e.key}`, e.url))
+  );
 
-  if (!regularData) { console.error('Error: propertyPageParams not found (regular)'); process.exit(1); }
-  partnerDataArr.forEach((d, i) => {
+  dataArr.forEach((d, i) => {
     if (!d) { console.error(`Error: propertyPageParams not found (${PARTNERS[i].key})`); process.exit(1); }
   });
 
+  const first  = dataArr[0];
   const result = {
-    propertyId:     regularData.propertyId || idArg,
-    hotelName:      regularData.hotelName,
+    propertyId:     first.propertyId || idArg,
+    hotelName:      first.hotelName,
     searchCriteria: rooms > 1
       ? `${checkin} - ${checkout}, ${adults}人, ${rooms}間客房`
       : `${checkin} - ${checkout}, ${adults}人`,
     currency,
-    regular: {
-      isSoldOut:  regularData.isSoldOut,
-      bookingUrl: regularUrl,
-      rooms:      regularData.rooms,
-    },
   };
 
-  partnerUrls.forEach((p, i) => {
-    result[p.key] = {
-      isSoldOut:  partnerDataArr[i].isSoldOut,
-      bookingUrl: p.url,
-      rooms:      partnerDataArr[i].rooms,
+  entries.forEach((e, i) => {
+    result[e.key] = {
+      isSoldOut:  dataArr[i].isSoldOut,
+      bookingUrl: e.url,
+      rooms:      dataArr[i].rooms,
     };
   });
 
