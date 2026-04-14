@@ -43,8 +43,10 @@ const children = parseInt(get('--children') || '0', 10);
 const rooms    = parseInt(get('--rooms')    || '1', 10);
 const currency = (get('--currency') || 'TWD').toUpperCase();
 
-// — Partner CID source (JCB TW) —
-const JCB_URL = 'https://www.agoda.com/zh-tw/jcbtw';
+// — Partners: add entries here to include more partner price comparisons —
+const PARTNERS = [
+  { key: 'jcb', url: 'https://www.agoda.com/zh-tw/jcbtw' },
+];
 
 // — API key: fetch from Agoda JS bundles —
 function _curlGetRaw(url) {
@@ -320,10 +322,10 @@ async function modePrice(apiKey) {
     process.exit(1);
   }
 
-  process.stderr.write('[agoda] fetching hotel page url and JCB cid...\n');
-  const [cityId, jcbCid] = await Promise.all([
+  process.stderr.write('[agoda] fetching hotel page url and partner cids...\n');
+  const [cityId, ...partnerCids] = await Promise.all([
     Promise.resolve(getCityId(apiKey)),
-    Promise.resolve(fetchCidFromUrl(JCB_URL)),
+    ...PARTNERS.map(p => Promise.resolve(fetchCidFromUrl(p.url))),
   ]);
   if (!cityId) { console.error('Error: could not resolve cityId for property', idArg); process.exit(1); }
 
@@ -332,17 +334,20 @@ async function modePrice(apiKey) {
 
   const los        = Math.round((new Date(checkout) - new Date(checkin)) / (1000 * 60 * 60 * 24));
   const regularUrl = `https://www.agoda.com/zh-tw${slug}?checkIn=${checkin}&los=${los}&adults=${adults}&children=${children}&rooms=${rooms}&currencyCode=${currency}`;
-  const jcbUrl     = `${regularUrl}&cid=${jcbCid}`;
+  const partnerUrls = PARTNERS.map((p, i) => ({ key: p.key, url: `${regularUrl}&cid=${partnerCids[i]}` }));
 
-  process.stderr.write(`[agoda] launching browsers in parallel (JCB cid: ${jcbCid})...\n`);
+  const cidLog = PARTNERS.map((p, i) => `${p.key}=${partnerCids[i]}`).join(', ');
+  process.stderr.write(`[agoda] launching browsers in parallel (${cidLog})...\n`);
 
-  const [regularData, jcbData] = await Promise.all([
+  const [regularData, ...partnerDataArr] = await Promise.all([
     getPricesViaBrowser('agoda-regular', regularUrl),
-    getPricesViaBrowser('agoda-jcb',     jcbUrl),
+    ...partnerUrls.map(p => getPricesViaBrowser(`agoda-${p.key}`, p.url)),
   ]);
 
   if (!regularData) { console.error('Error: propertyPageParams not found (regular)'); process.exit(1); }
-  if (!jcbData)     { console.error('Error: propertyPageParams not found (JCB)');     process.exit(1); }
+  partnerDataArr.forEach((d, i) => {
+    if (!d) { console.error(`Error: propertyPageParams not found (${PARTNERS[i].key})`); process.exit(1); }
+  });
 
   const result = {
     propertyId:     regularData.propertyId || idArg,
@@ -356,12 +361,15 @@ async function modePrice(apiKey) {
       bookingUrl: regularUrl,
       rooms:      regularData.rooms,
     },
-    jcb: {
-      isSoldOut:  jcbData.isSoldOut,
-      bookingUrl: jcbUrl,
-      rooms:      jcbData.rooms,
-    },
   };
+
+  partnerUrls.forEach((p, i) => {
+    result[p.key] = {
+      isSoldOut:  partnerDataArr[i].isSoldOut,
+      bookingUrl: p.url,
+      rooms:      partnerDataArr[i].rooms,
+    };
+  });
 
   console.log(JSON.stringify(result, null, 2));
 }
