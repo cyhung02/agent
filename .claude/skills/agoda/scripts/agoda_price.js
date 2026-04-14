@@ -203,7 +203,6 @@ function getPricesViaBrowser(pageUrl) {
   })()`);
 
   const evalScript = `(function() {
-    var adults = ${adults};
     var p = window.propertyPageParams;
     if (!p || !p.roomGridData) return JSON.stringify(null);
     return JSON.stringify({
@@ -223,7 +222,7 @@ function getPricesViaBrowser(pageUrl) {
           });
         });
         var offers = (r.rooms || []).filter(function(o) {
-          return !o.occupancy || o.occupancy >= adults;
+          return o.isFit !== false;
         }).map(function(o) {
           var bens = (o.benefits || [])
             .filter(function(b) { return b.isAvailable && b.title; })
