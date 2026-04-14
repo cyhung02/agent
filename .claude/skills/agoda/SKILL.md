@@ -6,24 +6,20 @@ allowed-tools: Bash
 
 # Agoda Hotel Search Skill
 
-Search Agoda using the bundled `agoda_search.js` script. The script handles all HTTP requests internally — no browser needed.
+Two scripts work together: `agoda_search.js` (hotel lookup) and `agoda_price.js` (room prices via headed browser).
 
-## Step 0 — Locate the Script
+## Step 0 — Locate the Scripts
 
-Before running any commands, use the **find-skill-script** skill to resolve the absolute path of `agoda_search.js` under the `scripts/` subdirectory.
+Before running any commands, use the **find-skill-script** skill to resolve the absolute paths of both scripts under the `scripts/` subdirectory:
 
-Use the returned absolute path in all subsequent `node <agoda_search.js path>` commands instead of the relative `scripts/agoda_search.js`.
+- `agoda_search.js`
+- `agoda_price.js`
 
----
-
-## Overview: Two-Mode Design
-
-- **Mode 1 (suggest)**: Searches hotel candidates by name and returns `propertyId` values needed for price queries.
-- **Mode 2 (price)**: Fetches room prices for a specific property given check-in/out dates and guest count.
+Use the returned absolute paths in all subsequent `node` commands.
 
 ---
 
-## Step 1 — Run Mode 1: Get Hotel Candidates
+## Step 1 — Find the Hotel: `agoda_search.js`
 
 ```bash
 node <agoda_search.js path> \
@@ -45,25 +41,21 @@ Returns JSON:
 }
 ```
 
----
+Pick the candidate whose `name` and `city` best match the user's intent. Note the `propertyId`.
 
-## Step 2 — Choose the Correct Property
-
-Examine the `candidates` list and pick the entry that best matches the user's intent. Note the `propertyId` — it is required for the price query.
-
-If multiple candidates are returned, prefer the one whose `name` and `city` best match what the user described. If genuinely ambiguous, present the top candidates and ask the user to confirm.
+If genuinely ambiguous, present the top candidates and ask the user to confirm.
 
 ---
 
-## Step 3 — Run Mode 2: Get Room Prices
+## Step 2 — Get Room Prices: `agoda_price.js`
 
 ```bash
-node <agoda_search.js path> \
-  --mode price \
+node <agoda_price.js path> \
   --id 621491 \
   --checkin 2026-06-01 \
   --checkout 2026-06-02 \
   --adults 2 \
+  [--children 0] \
   [--rooms 1] \
   [--currency TWD]
 ```
@@ -79,8 +71,6 @@ node <agoda_search.js path> \
 | `--children` | `0` | Number of children |
 | `--rooms` | `1` | Number of rooms |
 | `--currency` | `TWD` | Currency code (see table below) |
-
-All offers for each room type are returned (no limit).
 
 **Supported currencies:**
 
@@ -100,23 +90,21 @@ Returns JSON:
 ```json
 {
   "propertyId": "621491",
-  "hotelName": "JR Kyushu Blossom Shinjuku",
-  "searchCriteria": "6月1日 - 6月2日, 2人",
+  "hotelName": "新宿JR九州飯店 (JR Kyushu Hotel Blossom Shinjuku)",
+  "searchCriteria": "2026-06-01 - 2026-06-02, 2人",
   "isSoldOut": false,
   "currency": "TWD",
   "bookingUrl": "https://www.agoda.com/zh-tw/jr-kyushu-hotel-blossom-shinjuku/hotel/tokyo-jp.html?checkIn=2026-06-01&los=1&adults=2&children=0&rooms=1&currencyCode=TWD",
   "rooms": [
     {
-      "name": "Standard Double Room",
+      "name": "大床標準雙人間- 禁煙 (Standard Double Room with Queen Bed - Non-Smoking)",
       "isSoldOut": false,
-      "size": "22平方公尺/237平方英尺",
+      "size": "19平方公尺/205平方英尺",
       "beds": ["1張大床"],
       "offers": [
         {
-          "price": {
-            "amount": 4500
-          },
-          "benefits": ["2026年5月25日前可免費取消", "附早餐"]
+          "price": { "amount": 5955 },
+          "benefits": ["免費Wi-Fi", "2026年5月27日 星期三前可免費取消。", "Agoda可延後扣款"]
         }
       ]
     }
@@ -125,11 +113,12 @@ Returns JSON:
 ```
 
 **Room fields:**
-- `size` — room size string from Agoda (may be `null` if unavailable)
-- `beds` — bed type(s) from Agoda (e.g. `["1張大床"]`, `["2張單人床"]`); empty array if unavailable
+- `size` — room size string (may be `null` if unavailable)
+- `beds` — bed configuration(s) (e.g. `["1張大床"]`, `["2張單人床"]`); empty array if unavailable
 
-**Price fields:**
-- `price.amount` — inclusive price (taxes included) per night, rounded; currency is indicated by the top-level `currency` field
+**Offer fields:**
+- `price.amount` — display price per night, rounded; currency indicated by top-level `currency` field
+- `benefits` — available amenities, free cancellation deadline (if applicable), and pay-later info
 
 ---
 
@@ -139,10 +128,10 @@ When presenting room prices to the user:
 
 1. Show hotel name, search criteria (dates, guests, rooms).
 2. For each room type, show: room name, bed type (`beds`), size (if available), and all offers.
-3. For each offer, show: inclusive price (`price.amount` + top-level `currency`), and key benefits.
+3. For each offer, show: price (`price.amount` + top-level `currency`), and key benefits.
 4. If `isSoldOut` is `true` at the hotel level, inform the user the property is fully booked.
 5. If a specific room `isSoldOut` is `true`, note it is unavailable.
-6. If `bookingUrl` is present (non-null), show it as a clickable link so the user can proceed to book on Agoda. If it is `null`, omit it.
+6. If `bookingUrl` is present (non-null), show it as a clickable link so the user can proceed to book on Agoda.
 
 ---
 
@@ -154,4 +143,4 @@ When presenting room prices to the user:
 
 > **If the hotel is not found in suggest results, say so clearly.**
 >
-> Do not attempt to pass an unverified ID to the price mode. Always confirm the property via suggest first.
+> Do not attempt to pass an unverified ID to the price script. Always confirm the property via `agoda_search.js` suggest first.
