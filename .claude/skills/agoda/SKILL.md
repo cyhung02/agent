@@ -49,7 +49,7 @@ The price lookup uses the **playwright** Node.js API and launches Chrome in head
 If `playwright` is not installed, run:
 
 ```bash
-npm install playwright
+npm install -g playwright
 ```
 
 The script reads `HTTP_PROXY` / `http_proxy` from the environment for proxy settings and sets `chromiumSandbox: false` automatically.
