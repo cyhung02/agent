@@ -30,7 +30,7 @@ Use the returned absolute path in all subsequent `node` commands.
 
 ---
 
-## Step 1 — Find the Hotel
+## Step 2 — Find the Hotel
 
 ```bash
 node <agoda.js path> --name "JR九州Blossom新宿"
@@ -56,7 +56,7 @@ If genuinely ambiguous, present the top candidates and ask the user to confirm.
 
 ---
 
-## Step 2 — Prerequisite: `playwright` npm package (headed browser)
+## Step 3 — Prerequisite: `playwright` npm package (headed browser)
 
 The price lookup uses the **playwright** Node.js API and launches Chrome in headed mode (`headless: false`). Agoda actively blocks headless browsers.
 
@@ -73,7 +73,7 @@ The script reads `HTTP_PROXY` / `http_proxy` from the environment for proxy sett
 On **Linux/macOS**, the script requires `$DISPLAY` to be set. On environments without a display server, use `xvfb-run` to provide a virtual display:
 
 ```bash
-xvfb-run -a node <agoda.js path> --id 621491 --checkin 2026-06-01 --checkout 2026-06-02 --adults 2
+xvfb-run -a node <agoda.js path> --id 621491 --checkin 2026-06-01 --checkout 2026-06-02
 ```
 
 To check whether you need this:
@@ -86,20 +86,108 @@ On **Windows**, `$DISPLAY` is not required — Playwright uses native rendering 
 
 ---
 
-## Step 3 — Get Room Prices
+## Step 4 — Get Room Prices
+
+The script fetches prices from all configured partners in parallel and consolidates the results. Two output modes are available:
+
+### Default mode — 4 best-price slots per room
 
 ```bash
 node <agoda.js path> \
   --id 621491 \
   --checkin 2026-06-01 \
   --checkout 2026-06-02 \
-  --adults 2 \
+  [--adults 2] \
   [--children 0] \
   [--rooms 1] \
   [--currency TWD]
 ```
 
-**Parameters:**
+Each room's `bestOffers` contains the cheapest offer across all partners for each of the 4 categories:
+
+| Key | 說明 |
+|---|---|
+| `noMeal_nonCancellable` | 不含餐，不可取消 |
+| `noMeal_cancellable` | 不含餐，可取消 |
+| `withMeal_nonCancellable` | 含餐，不可取消 |
+| `withMeal_cancellable` | 含餐，可取消 |
+
+A slot is `null` when no matching offer exists for that room.
+
+Returns JSON:
+```json
+{
+  "propertyId": "621491",
+  "hotelName": "新宿JR九州飯店 (JR Kyushu Hotel Blossom Shinjuku)",
+  "searchCriteria": "2026-06-01 - 2026-06-02, 2人",
+  "currency": "TWD",
+  "bookingUrls": {
+    "regular": "https://www.agoda.com/zh-tw/...&cid=-1",
+    "jcb": "https://www.agoda.com/zh-tw/...&cid=1926014",
+    "mctaishinbusiness": "https://www.agoda.com/zh-tw/...&cid=1897427",
+    "google": "https://www.agoda.com/zh-tw/...&cid=1917614"
+  },
+  "rooms": [
+    {
+      "name": "大床標準雙人間- 禁煙 (Standard Double Room with Queen Bed - Non-Smoking)",
+      "size": "19平方公尺/205平方英尺",
+      "beds": ["1張大床"],
+      "bestOffers": {
+        "noMeal_nonCancellable":   { "price": 7499, "partner": "jcb", "benefits": ["免費Wi-Fi"] },
+        "noMeal_cancellable":      { "price": 6811, "partner": "jcb", "benefits": ["免費Wi-Fi", "2026年5月21日 星期四前可免費取消", "可延至2026年5月19日 星期二扣款"] },
+        "withMeal_nonCancellable": { "price": 8792, "partner": "jcb", "benefits": ["早餐", "免費Wi-Fi"] },
+        "withMeal_cancellable":    { "price": 8328, "partner": "jcb", "benefits": ["早餐", "免費Wi-Fi", "2026年5月21日 星期四前可免費取消", "可延至2026年5月19日 星期二扣款"] }
+      }
+    }
+  ]
+}
+```
+
+### `--all_offers` mode — all offers with per-partner prices
+
+```bash
+node <agoda.js path> \
+  --id 621491 \
+  --checkin 2026-06-01 \
+  --checkout 2026-06-02 \
+  [--adults 2] \
+  [--children 0] \
+  [--rooms 1] \
+  [--currency TWD] \
+  --all_offers
+```
+
+Each room's `offers` lists every distinct benefit combination, with prices for every partner that carries it. Semantically identical benefits phrased differently across partners are merged into the same offer row.
+
+Returns JSON:
+```json
+{
+  "propertyId": "621491",
+  "hotelName": "新宿JR九州飯店 (JR Kyushu Hotel Blossom Shinjuku)",
+  "searchCriteria": "2026-06-01 - 2026-06-02, 2人",
+  "currency": "TWD",
+  "bookingUrls": { ... },
+  "rooms": [
+    {
+      "name": "大床標準雙人間- 禁煙 (Standard Double Room with Queen Bed - Non-Smoking)",
+      "size": "19平方公尺/205平方英尺",
+      "beds": ["1張大床"],
+      "offers": [
+        {
+          "benefits": ["免費Wi-Fi", "2026年5月21日 星期四前可免費取消。", "2026年5月19日 星期二前無須付款"],
+          "prices": { "regular": 7235, "jcb": 6811, "mctaishinbusiness": 6936, "google": 7413 }
+        },
+        {
+          "benefits": ["免費Wi-Fi"],
+          "prices": { "regular": 7880, "jcb": 7499, "mctaishinbusiness": 7637 }
+        }
+      ]
+    }
+  ]
+}
+```
+
+### Parameters
 
 | Flag | Default | Description |
 |---|---|---|
@@ -110,8 +198,9 @@ node <agoda.js path> \
 | `--children` | `0` | Number of children |
 | `--rooms` | `1` | Number of rooms |
 | `--currency` | `TWD` | Currency code (see table below) |
+| `--all_offers` | off | Show all offers with per-partner prices instead of 4 best-price slots |
 
-**Supported currencies:**
+### Supported currencies
 
 | Code | Currency |
 |---|---|
@@ -125,51 +214,12 @@ node <agoda.js path> \
 | `AUD` | 澳幣 |
 | `GBP` | 英鎊 |
 
-The script automatically fetches prices from all configured partners (defined in the `PARTNERS` array in the script) in parallel and consolidates the results.
-
-Returns JSON:
-```json
-{
-  "propertyId": "621491",
-  "hotelName": "新宿JR九州飯店 (JR Kyushu Hotel Blossom Shinjuku)",
-  "searchCriteria": "2026-06-01 - 2026-06-02, 2人",
-  "currency": "TWD",
-  "bookingUrls": {
-    "regular": "https://www.agoda.com/zh-tw/...&cid=-1",
-    "jcb": "https://www.agoda.com/zh-tw/...&cid=1926014",
-    "mctaishinbusiness": "https://www.agoda.com/zh-tw/...&cid=1897427"
-  },
-  "rooms": [
-    {
-      "name": "大床標準雙人間- 禁煙 (Standard Double Room with Queen Bed - Non-Smoking)",
-      "size": "19平方公尺/205平方英尺",
-      "beds": ["1張大床"],
-      "offers": [
-        {
-          "benefits": ["免費Wi-Fi", "2026年5月27日 星期三前可免費取消。", "2026年5月25日 星期一前無須付款"],
-          "prices": {
-            "regular": 7829,
-            "jcb": 7483,
-            "mctaishinbusiness": 7672
-          }
-        }
-      ]
-    }
-  ]
-}
-```
-
-**Top-level fields:**
+**Common fields (both modes):**
 - `bookingUrls` — one booking URL per partner; use the partner key to look up the URL when presenting links to the user
-- `rooms` — consolidated list of room types across all partners
-
-**Room fields:**
+- `rooms` — sorted by size ascending; rooms with unknown size appear last
 - `size` — room size string (may be `null` if unavailable)
 - `beds` — bed configuration(s) (e.g. `["1張大床"]`, `["2張單人床"]`); empty array if unavailable
-
-**Offer fields:**
 - `benefits` — amenities, free cancellation deadline (if applicable), and pay-later info
-- `prices` — price per night (rounded, in `currency`) for each partner that has this offer; a partner key is absent if that partner does not offer this benefit combination
 
 ---
 
@@ -178,27 +228,37 @@ Returns JSON:
 ### Step 1 — Header
 Show hotel name and search criteria (dates, guests, rooms).
 
-### Step 2 — Summary table
-Render a one-row-per-room overview using each room's `lowestPrice` field.
-Rooms are already sorted by size ascending in the JSON.
+### Step 2 — Summary table (default mode)
+
+Render a one-row-per-room overview. Rooms are already sorted by size ascending in the JSON.
+
+| 房型 | 大小 | 床型 | 不含餐不可取消 | 不含餐可取消 | 含餐不可取消 | 含餐可取消 |
+|---|---|---|---|---|---|---|
+| {name} | {size or —} | {beds joined, or —} | {slot or —} | {slot or —} | {slot or —} | {slot or —} |
+
+**Slot cell rules:**
+- If the slot is `null`, show `—`
+- Otherwise: `[partner](bookingUrls[partner]) TWD X,XXX` followed by the key benefit strings (cancellation deadline, pay-later deadline) from `benefits`, each on its own line
+
+### Step 2 — Summary table (`--all_offers` mode)
+
+Render a one-row-per-room overview showing the cheapest offer across all partners and all offers.
 
 | 房型 | 大小 | 床型 | 最低價 |
 |---|---|---|---|
-| {name} | {size or —} | {beds joined, or —} | {see rules below} |
-
-**Lowest price cell rules:**
-- Link the partner name to `bookingUrls[lowestPrice.partner]`
-- `lowestPrice.cancellable === true` → `[partner](url) TWD X,XXX ✓ 可免費取消`
-- `lowestPrice.cancellable === false` → `[partner](url) TWD X,XXX ✗ 不可取消`; if `lowestCancellablePrice` exists, append on a second line: `可免費取消最低：[partner](url) TWD X,XXX`
+| {name} | {size or —} | {beds joined, or —} | cheapest price among all offers and partners, linked to that partner's booking URL |
 
 ### Step 3 — Detailed breakdown
-After the summary, list full offer details for every room:
 
+After the summary, list full offer details for every room.
+
+**Default mode:**
+For each room, show each non-null slot in `bestOffers` with its price, partner (linked to `bookingUrls[partner]`), and `benefits`.
+
+**`--all_offers` mode:**
 1. **List every room in the `rooms` array — do not omit any.**
 2. For each room, **list every offer in its `offers` array** — do not skip.
 3. For each offer, show the `benefits` and the price for **every partner key present in `prices`**. Use plain partner names (no links) — the booking links are already in the summary table. If a partner key is absent from `prices`, omit it — do not show a dash or placeholder.
-
-> **Completeness check:** Before finishing, confirm you have presented all `roomCount` rooms.
 
 ---
 

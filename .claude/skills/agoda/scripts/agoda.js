@@ -5,9 +5,14 @@
 //   # Suggest (hotel name lookup)
 //   node agoda.js --name "JR九州Blossom新宿"
 //
-//   # Price — fetches regular + partners in parallel automatically
+//   # Price — fetches all partners in parallel, outputs 4 best-price slots per room:
+//   #   noMeal_nonCancellable / noMeal_cancellable / withMeal_nonCancellable / withMeal_cancellable
 //   node agoda.js --id 621491 --checkin 2026-06-01 --checkout 2026-06-02 \
 //     --adults 2 [--children 0] [--rooms 1] [--currency TWD]
+//
+//   # Price (all offers) — shows every offer grouped by benefits, with per-partner prices
+//   node agoda.js --id 621491 --checkin 2026-06-01 --checkout 2026-06-02 \
+//     --adults 2 [--children 0] [--rooms 1] [--currency TWD] --all_offers
 //
 // Mode is auto-detected: --name → suggest, --id + --checkin + --checkout → price
 
@@ -46,7 +51,8 @@ const checkout = getArg('--checkout') || '';
 const adults   = parseInt(getArg('--adults')   || '2', 10);
 const children = parseInt(getArg('--children') || '0', 10);
 const rooms    = parseInt(getArg('--rooms')    || '1', 10);
-const currency = (getArg('--currency') || 'TWD').toUpperCase();
+const currency   = (getArg('--currency') || 'TWD').toUpperCase();
+const allOffers  = args.includes('--all_offers');
 
 // — Partners: add entries here to include more partner price comparisons —
 // url-based: cid fetched from partner landing page
@@ -480,6 +486,10 @@ function isCancellable(offer) {
   return offer.benefits.some(b => b.includes('可免費取消'));
 }
 
+function hasMeal(offer) {
+  return offer.benefits.some(b => /早餐|含餐|用餐/.test(b));
+}
+
 // — Consolidate results from all partners —
 function consolidate(entries, partnerResults) {
   // bookingUrls: one per partner
@@ -502,52 +512,50 @@ function consolidate(entries, partnerResults) {
       if (r) { meta = r; break; }
     }
 
-    // Group offers by normalized sorted benefits key; keep lowest price per partner.
-    // Normalization merges semantically identical benefits that differ only in
-    // punctuation or phrasing (e.g. regular vs mctaishinbusiness pay-later wording).
-    const offerMap = new Map();
+    if (allOffers) {
+      // All-offers mode: group by normalized benefit key, keep lowest price per partner
+      const offerMap = new Map();
+      entries.forEach((partner, idx) => {
+        const room = (partnerResults[idx].rooms || []).find(r => r.name === roomName);
+        if (!room) return;
+        (room.offers || []).forEach(offer => {
+          const normalizedKey = JSON.stringify([...offer.benefits].map(normalizeBenefit).sort());
+          if (!offerMap.has(normalizedKey)) offerMap.set(normalizedKey, { benefits: offer.benefits, prices: {} });
+          const slot = offerMap.get(normalizedKey);
+          if (!(partner.key in slot.prices) || offer.price.amount < slot.prices[partner.key])
+            slot.prices[partner.key] = offer.price.amount;
+        });
+      });
+
+      return { name: meta.name, size: meta.size, beds: meta.beds, offers: [...offerMap.values()] };
+    }
+
+    // Default mode: cheapest offer across all partners for each of the 4 categories
+    const best = {
+      noMeal_nonCancellable:   null,
+      noMeal_cancellable:      null,
+      withMeal_nonCancellable: null,
+      withMeal_cancellable:    null,
+    };
+
     entries.forEach((partner, idx) => {
       const room = (partnerResults[idx].rooms || []).find(r => r.name === roomName);
       if (!room) return;
       (room.offers || []).forEach(offer => {
-        const normalizedKey = JSON.stringify([...offer.benefits].map(normalizeBenefit).sort());
-        if (!offerMap.has(normalizedKey)) offerMap.set(normalizedKey, { benefits: offer.benefits, prices: {} });
-        const slot = offerMap.get(normalizedKey);
-        if (!(partner.key in slot.prices) || offer.price.amount < slot.prices[partner.key])
-          slot.prices[partner.key] = offer.price.amount;
+        const key   = `${hasMeal(offer) ? 'withMeal' : 'noMeal'}_${isCancellable(offer) ? 'cancellable' : 'nonCancellable'}`;
+        const price = offer.price.amount;
+        if (!best[key] || price < best[key].price)
+          best[key] = { price, partner: partner.key, benefits: offer.benefits };
       });
     });
 
-    const offers = [...offerMap.values()];
-
-    // Compute per-room lowest price metadata.
-    // lowestCancellablePrice is only added when the absolute lowest is non-cancellable.
-    let lowestPrice = Infinity, lowestPartner = null, lowestIsCancellable = false;
-    let lowestCancel = Infinity, lowestCancelPartner = null;
-    for (const offer of offers) {
-      const cancellable = isCancellable(offer);
-      for (const [partner, price] of Object.entries(offer.prices)) {
-        if (price < lowestPrice) {
-          lowestPrice = price; lowestPartner = partner; lowestIsCancellable = cancellable;
-        }
-        if (cancellable && price < lowestCancel) {
-          lowestCancel = price; lowestCancelPartner = partner;
-        }
-      }
-    }
-
-    const room = {
-      name:   meta.name,
-      size:   meta.size,
-      beds:   meta.beds,
-      offers,
-      lowestPrice: { price: lowestPrice, partner: lowestPartner, cancellable: lowestIsCancellable },
+    return {
+      name:       meta.name,
+      size:       meta.size,
+      beds:       meta.beds,
+      bestOffers: best,
     };
-    if (!lowestIsCancellable && lowestCancelPartner) {
-      room.lowestCancellablePrice = { price: lowestCancel, partner: lowestCancelPartner };
-    }
-    return room;
-  }).filter(r => r.offers.length > 0);
+  }).filter(r => allOffers ? r.offers.length > 0 : Object.values(r.bestOffers).some(v => v !== null));
 
   // Sort rooms by size ascending; rooms with unknown size go last
   rooms.sort((a, b) => parseSizeM2(a.size) - parseSizeM2(b.size));
@@ -621,8 +629,7 @@ async function modePrice(apiKey) {
       : `${checkin} - ${checkout}, ${adults}人`,
     currency,
     bookingUrls,
-    roomCount:      consolidatedRooms.length,
-    rooms:          consolidatedRooms,
+    rooms: consolidatedRooms,
   };
 
   console.log(JSON.stringify(result, null, 2));
@@ -639,9 +646,11 @@ async function main() {
   } else {
     console.error(
       'Usage:\n' +
-      '  node agoda.js --name "hotel name"                                    # suggest\n' +
-      '  node agoda.js --id ID --checkin YYYY-MM-DD --checkout YYYY-MM-DD \\  # price\n' +
-      '    [--adults N] [--currency TWD]'
+      '  node agoda.js --name "hotel name"                                     # suggest\n' +
+      '  node agoda.js --id ID --checkin YYYY-MM-DD --checkout YYYY-MM-DD \\   # price (4 best-price slots per room)\n' +
+      '    [--adults 2] [--children 0] [--rooms 1] [--currency TWD]\n' +
+      '  node agoda.js --id ID --checkin YYYY-MM-DD --checkout YYYY-MM-DD \\   # price (all offers, per-partner prices)\n' +
+      '    [--adults 2] [--children 0] [--rooms 1] [--currency TWD] --all_offers'
     );
     process.exit(1);
   }
