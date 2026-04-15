@@ -13,7 +13,8 @@
 
 'use strict';
 
-const { execFileSync, spawn } = require('child_process');
+const { execFileSync } = require('child_process');
+const { chromium }    = require('playwright');
 const crypto = require('crypto');
 const fs   = require('fs');
 const os   = require('os');
@@ -376,88 +377,76 @@ function getPropertySlug(cityId, apiKey) {
 }
 
 // — Browser price extraction —
-function pwAsync(session, ...pwArgs) {
-  return new Promise((resolve, reject) => {
-    const child = spawn('playwright-cli', ['-s', session, ...pwArgs]);
-    let out = '', err = '';
-    child.stdout.on('data', d => out += d);
-    child.stderr.on('data', d => err += d);
-    child.on('close', code =>
-      code === 0 ? resolve(out) : reject(new Error(`[${session}] playwright-cli exit ${code}: ${err.slice(0, 200)}`))
-    );
-  });
+
+function buildLaunchOptions() {
+  const proxyUrl = process.env.HTTP_PROXY || process.env.http_proxy || '';
+  let proxy;
+  if (proxyUrl) {
+    const u = new URL(proxyUrl);
+    proxy = {
+      server:   `${u.protocol}//${u.hostname}:${u.port}`,
+      username: u.username || '',
+      password: u.password || '',
+    };
+  }
+  return { channel: 'chrome', headless: false, chromiumSandbox: false, proxy };
 }
 
-const WAIT_SCRIPT = `(function() {
-  return new Promise(function(resolve, reject) {
-    var deadline = Date.now() + 10000;
-    function check() {
-      var p = window.propertyPageParams;
-      if (p && p.roomGridData && p.roomGridData.masterRooms) { resolve(); return; }
-      if (Date.now() >= deadline) { reject(new Error('timeout waiting for propertyPageParams')); return; }
-      setTimeout(check, 200);
-    }
-    check();
-  });
-})()`;
+function extractRoomData() {
+  const p = window.propertyPageParams;
+  if (!p || !p.roomGridData) return null;
+  return {
+    propertyId: p.hotelInfo?.hotelId,
+    hotelName:  p.hotelInfo?.name,
+    isSoldOut:  !(p.roomGridData.masterRooms?.length),
+    rooms: (p.roomGridData.masterRooms || []).map(r => {
+      const sizeFeature = (r.features || []).find(f => f.symbol === 'ficon-sqm');
+      const size = sizeFeature ? sizeFeature.title.replace(/^客房面積：/, '') : null;
+      const beds = (r.bedroomLayouts || []).flatMap(layout =>
+        (layout.bedrooms || []).flatMap(bedroom =>
+          (bedroom.beds || []).filter(bed => bed.name).map(bed => bed.name)
+        )
+      );
+      const offers = (r.rooms || [])
+        .filter(o => o.isFit !== false)
+        .map(o => {
+          const bens = (o.benefits || [])
+            .filter(b => b.isAvailable && b.title)
+            .map(b => b.title);
+          if (o.isFreeCancellation && o.cancellation?.title) bens.push(o.cancellation.title);
+          if (o.payLater?.isAvailable)
+            bens.push((o.payLater.hasDescription && o.payLater.description) || o.payLater.title);
+          const ds      = o.pricing?.displaySummary?.perNight;
+          const afterCb = ds?.displayAfterCashback;
+          const apsVal  = o.apsPeekViewModel?.apsPriceValue;
+          let priceAmt;
+          if (apsVal && afterCb?.exclusive) {
+            priceAmt = apsVal * (afterCb.allInclusive / afterCb.exclusive);
+          } else {
+            priceAmt = afterCb?.allInclusive
+              ?? ds?.chargeTotal?.allInclusive
+              ?? o.pricing?.displayPrice;
+          }
+          return { price: { amount: Math.round(priceAmt) }, benefits: bens };
+        })
+        .filter(o => o.price.amount > 0);
+      return { name: r.name, isSoldOut: offers.length === 0, size, beds, offers };
+    }).filter(r => r.offers.length > 0),
+  };
+}
 
-const EVAL_SCRIPT = `(function() {
-  var p = window.propertyPageParams;
-  if (!p || !p.roomGridData) return JSON.stringify(null);
-  return JSON.stringify({
-    propertyId: p.hotelInfo && p.hotelInfo.hotelId,
-    hotelName: p.hotelInfo && p.hotelInfo.name,
-    isSoldOut: !(p.roomGridData.masterRooms && p.roomGridData.masterRooms.length),
-    rooms: (p.roomGridData.masterRooms || []).map(function(r) {
-      var sizeFeature = (r.features || []).find(function(f) { return f.symbol === 'ficon-sqm'; });
-      var size = sizeFeature ? sizeFeature.title.replace(/^客房面積：/, '') : null;
-      var beds = [];
-      (r.bedroomLayouts || []).forEach(function(layout) {
-        (layout.bedrooms || []).forEach(function(bedroom) {
-          (bedroom.beds || []).forEach(function(bed) {
-            if (bed.name) beds.push(bed.name);
-          });
-        });
-      });
-      var offers = (r.rooms || []).filter(function(o) {
-        return o.isFit !== false;
-      }).map(function(o) {
-        var bens = (o.benefits || [])
-          .filter(function(b) { return b.isAvailable && b.title; })
-          .map(function(b) { return b.title; });
-        if (o.isFreeCancellation && o.cancellation && o.cancellation.title)
-          bens.push(o.cancellation.title);
-        if (o.payLater && o.payLater.isAvailable)
-          bens.push((o.payLater.hasDescription && o.payLater.description) || o.payLater.title);
-        var ds = o.pricing && o.pricing.displaySummary && o.pricing.displaySummary.perNight;
-        var afterCb = ds && ds.displayAfterCashback;
-        var apsVal = o.apsPeekViewModel && o.apsPeekViewModel.apsPriceValue;
-        var priceAmt;
-        if (apsVal && afterCb && afterCb.exclusive) {
-          priceAmt = apsVal * (afterCb.allInclusive / afterCb.exclusive);
-        } else {
-          priceAmt = (afterCb && afterCb.allInclusive)
-            || (ds && ds.chargeTotal && ds.chargeTotal.allInclusive)
-            || (o.pricing && o.pricing.displayPrice);
-        }
-        return { price: { amount: Math.round(priceAmt) }, benefits: bens };
-      }).filter(function(o) { return o.price.amount > 0; });
-      return { name: r.name, isSoldOut: offers.length === 0, size: size, beds: beds, offers: offers };
-    }).filter(function(r) { return r.offers.length > 0; })
-  });
-})()`;
-
-async function getPricesViaBrowser(session, pageUrl) {
-  try { await pwAsync(session, 'close'); } catch {}
+async function fetchPricesInContext(browser, pageUrl) {
+  const context = await browser.newContext({ ignoreHTTPSErrors: true });
   try {
-    await pwAsync(session, 'open', '--headed', pageUrl);
-    await pwAsync(session, 'eval', WAIT_SCRIPT);
-    const raw   = await pwAsync(session, 'eval', EVAL_SCRIPT);
-    const match = raw.match(/### Result\s*\n"([\s\S]*?)"\n/);
-    if (!match) throw new Error(`[${session}] unexpected eval output: ` + raw.slice(0, 200));
-    return JSON.parse(JSON.parse('"' + match[1] + '"'));
+    const page = await context.newPage();
+    await page.goto(pageUrl, { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(
+      () => window.propertyPageParams?.roomGridData?.masterRooms,
+      { timeout: 15000 }
+    );
+    return await page.evaluate(extractRoomData);
   } finally {
-    try { await pwAsync(session, 'close'); } catch {}
+    await context.close();
   }
 }
 
@@ -509,18 +498,6 @@ function consolidate(entries, partnerResults) {
 }
 
 async function modePrice(apiKey) {
-  // Check playwright-cli is available (required for headed browser; Agoda blocks headless)
-  try {
-    execFileSync('playwright-cli', ['--version'], { stdio: 'ignore' });
-  } catch {
-    console.error(
-      'Error: playwright-cli not found.\n' +
-      'This script requires a headed browser — Agoda blocks headless mode.\n' +
-      'Install playwright-cli via the playwright-cli skill install script.'
-    );
-    process.exit(1);
-  }
-
   process.stderr.write('[agoda] fetching hotel page url and partner cids...\n');
 
   const urlPartners = PARTNERS.filter(p => p.url);
@@ -562,9 +539,10 @@ async function modePrice(apiKey) {
   const cidLog = entries.map(e => `${e.key}=${cidByKey[e.key]}`).join(', ');
   process.stderr.write(`[agoda] launching browsers in parallel (${cidLog})...\n`);
 
+  const browser = await chromium.launch(buildLaunchOptions());
   const settled = await Promise.allSettled(
-    entries.map(e => getPricesViaBrowser(`agoda-${e.key}`, e.url))
-  );
+    entries.map(e => fetchPricesInContext(browser, e.url))
+  ).finally(() => browser.close());
   const failures = settled
     .map((r, i) => ({ ...r, key: entries[i].key }))
     .filter(r => r.status === 'rejected');
