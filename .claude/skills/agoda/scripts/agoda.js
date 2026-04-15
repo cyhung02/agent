@@ -13,7 +13,7 @@
 
 'use strict';
 
-const { execFileSync } = require('child_process');
+const { execFileSync, spawn } = require('child_process');
 const { chromium }    = require('playwright');
 const crypto = require('crypto');
 const fs   = require('fs');
