@@ -150,7 +150,7 @@ function fetchCidFromGoogleMaps(hotelName, checkin, checkout) {
   ], { encoding: 'utf8', maxBuffer: 5 * 1024 * 1024 });
 
   // Step 3: extract Agoda site_id (= cid)
-  const cidMatch = placeHtml.match(/site_id=(\d+)/);
+  const cidMatch = placeHtml.match(/site_id(?:=|%3D)(\d+)/i);
   if (!cidMatch) throw new Error(`Agoda not listed on Google Maps for: ${hotelName}`);
   return parseInt(cidMatch[1], 10);
 }
