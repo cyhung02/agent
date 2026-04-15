@@ -32,16 +32,20 @@ const TAIL_SIZE  = 512;
 
 // — Argument parsing —
 const args = process.argv.slice(2);
-const get  = (flag) => { const i = args.indexOf(flag); return i !== -1 ? args[i + 1] : null; };
 
-const nameArg  = get('--name')     || '';
-const idArg    = get('--id')       || '';
-const checkin  = get('--checkin')  || '';
-const checkout = get('--checkout') || '';
-const adults   = parseInt(get('--adults')   || '2', 10);
-const children = parseInt(get('--children') || '0', 10);
-const rooms    = parseInt(get('--rooms')    || '1', 10);
-const currency = (get('--currency') || 'TWD').toUpperCase();
+function getArg(flag) {
+  const i = args.indexOf(flag);
+  return i !== -1 ? args[i + 1] : null;
+}
+
+const nameArg  = getArg('--name')     || '';
+const idArg    = getArg('--id')       || '';
+const checkin  = getArg('--checkin')  || '';
+const checkout = getArg('--checkout') || '';
+const adults   = parseInt(getArg('--adults')   || '2', 10);
+const children = parseInt(getArg('--children') || '0', 10);
+const rooms    = parseInt(getArg('--rooms')    || '1', 10);
+const currency = (getArg('--currency') || 'TWD').toUpperCase();
 
 // — Partners: add entries here to include more partner price comparisons —
 // url-based: cid fetched from partner landing page
@@ -54,18 +58,18 @@ const PARTNERS = [
 ];
 
 // — API key: fetch from Agoda JS bundles —
-function _curlGetRaw(url) {
+function curlGetRaw(url) {
   return execFileSync('curl', [
     '-s', '--fail', '--compressed', '-H', `User-Agent: ${FETCH_UA}`, url,
   ], { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 });
 }
 
-function _fetchApiKey() {
-  const html      = _curlGetRaw(HOTEL_PAGE);
+function fetchApiKey() {
+  const html      = curlGetRaw(HOTEL_PAGE);
   const propMatch = html.match(/(property-[a-f0-9]+\.js)/);
   if (!propMatch) throw new Error('property-*.js bundle not found in HTML');
 
-  const propJs = _curlGetRaw(CDN_BASE + propMatch[1]);
+  const propJs = curlGetRaw(CDN_BASE + propMatch[1]);
   const pairs  = [...propJs.matchAll(/([0-9]+):"([a-f0-9]{4,})"/g)];
   if (!pairs.length) throw new Error('chunk map not found in property bundle');
 
@@ -100,14 +104,14 @@ async function getApiKey() {
     if (cache.key && Date.now() - cache.fetchedAt < KEY_TTL_MS) return cache.key;
   } catch {}
   process.stderr.write('[agoda] fetching api key...\n');
-  const key = await _fetchApiKey();
+  const key = await fetchApiKey();
   fs.writeFileSync(KEY_CACHE_PATH, JSON.stringify({ key, fetchedAt: Date.now() }));
   return key;
 }
 
 // — CID: fetch from partner landing page —
 function fetchCidFromUrl(url) {
-  const html = _curlGetRaw(url);
+  const html = curlGetRaw(url);
   const m = html.match(/"cid":(-?\d+)/);
   if (!m) throw new Error(`cid not found in page: ${url}`);
   return parseInt(m[1], 10);
@@ -330,11 +334,14 @@ const EVAL_SCRIPT = `(function() {
         var ds = o.pricing && o.pricing.displaySummary && o.pricing.displaySummary.perNight;
         var afterCb = ds && ds.displayAfterCashback;
         var apsVal = o.apsPeekViewModel && o.apsPeekViewModel.apsPriceValue;
-        var priceAmt = (apsVal && afterCb && afterCb.exclusive)
-          ? apsVal * (afterCb.allInclusive / afterCb.exclusive)
-          : (afterCb && afterCb.allInclusive)
+        var priceAmt;
+        if (apsVal && afterCb && afterCb.exclusive) {
+          priceAmt = apsVal * (afterCb.allInclusive / afterCb.exclusive);
+        } else {
+          priceAmt = (afterCb && afterCb.allInclusive)
             || (ds && ds.chargeTotal && ds.chargeTotal.allInclusive)
             || (o.pricing && o.pricing.displayPrice);
+        }
         return { price: { amount: Math.round(priceAmt) }, benefits: bens };
       }).filter(function(o) { return o.price.amount > 0; });
       return { name: r.name, isSoldOut: offers.length === 0, size: size, beds: beds, offers: offers };
@@ -357,16 +364,15 @@ async function getPricesViaBrowser(session, pageUrl) {
 }
 
 // — Consolidate results from all partners —
-function consolidate(entries, dataArr) {
+function consolidate(entries, partnerResults) {
   // bookingUrls: one per partner
-  const bookingUrls = {};
-  entries.forEach((e, i) => { bookingUrls[e.key] = e.url; });
+  const bookingUrls = Object.fromEntries(entries.map(e => [e.key, e.url]));
 
   // Collect room names in order of first appearance across all partners
   const roomOrder = [];
   const roomSeen  = new Set();
-  dataArr.forEach(d => {
-    (d.rooms || []).forEach(r => {
+  partnerResults.forEach(partnerData => {
+    (partnerData.rooms || []).forEach(r => {
       if (!roomSeen.has(r.name)) { roomSeen.add(r.name); roomOrder.push(r.name); }
     });
   });
@@ -374,22 +380,22 @@ function consolidate(entries, dataArr) {
   const rooms = roomOrder.map(roomName => {
     // Room metadata from first partner that has it
     let meta = null;
-    for (const d of dataArr) {
-      const r = (d.rooms || []).find(r => r.name === roomName);
+    for (const partnerData of partnerResults) {
+      const r = (partnerData.rooms || []).find(r => r.name === roomName);
       if (r) { meta = r; break; }
     }
 
     // Group offers by sorted benefits key; keep lowest price per partner
     const offerMap = new Map();
-    entries.forEach((e, i) => {
-      const room = (dataArr[i].rooms || []).find(r => r.name === roomName);
+    entries.forEach((partner, idx) => {
+      const room = (partnerResults[idx].rooms || []).find(r => r.name === roomName);
       if (!room) return;
       (room.offers || []).forEach(offer => {
         const key = JSON.stringify([...offer.benefits].sort());
         if (!offerMap.has(key)) offerMap.set(key, { benefits: offer.benefits, prices: {} });
         const slot = offerMap.get(key);
-        if (!(e.key in slot.prices) || offer.price.amount < slot.prices[e.key])
-          slot.prices[e.key] = offer.price.amount;
+        if (!(partner.key in slot.prices) || offer.price.amount < slot.prices[partner.key])
+          slot.prices[partner.key] = offer.price.amount;
       });
     });
 
@@ -424,8 +430,8 @@ async function modePrice(apiKey) {
 
   // Step 1: parallel — cityId + url-based partner cids
   const [cityId, ...urlCids] = await Promise.all([
-    Promise.resolve(getCityId(apiKey)),
-    ...urlPartners.map(p => Promise.resolve(fetchCidFromUrl(p.url))),
+    getCityId(apiKey),
+    ...urlPartners.map(p => fetchCidFromUrl(p.url)),
   ]);
   if (!cityId) { console.error('Error: could not resolve cityId for property', idArg); process.exit(1); }
 
@@ -458,16 +464,16 @@ async function modePrice(apiKey) {
   const cidLog = entries.map(e => `${e.key}=${cidByKey[e.key]}`).join(', ');
   process.stderr.write(`[agoda] launching browsers in parallel (${cidLog})...\n`);
 
-  const dataArr = await Promise.all(
+  const partnerResults = await Promise.all(
     entries.map(e => getPricesViaBrowser(`agoda-${e.key}`, e.url))
   );
 
-  dataArr.forEach((d, i) => {
+  partnerResults.forEach((d, i) => {
     if (!d) { console.error(`Error: propertyPageParams not found (${entries[i].key})`); process.exit(1); }
   });
 
-  const first      = dataArr[0];
-  const { bookingUrls, rooms: consolidatedRooms } = consolidate(entries, dataArr);
+  const first      = partnerResults[0];
+  const { bookingUrls, rooms: consolidatedRooms } = consolidate(entries, partnerResults);
 
   const result = {
     propertyId:     first.propertyId || idArg,
