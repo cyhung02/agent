@@ -18,7 +18,9 @@
 
 'use strict';
 
-const { execFileSync, spawn } = require('child_process');
+const { execFileSync, execFile, spawn } = require('child_process');
+const { promisify } = require('util');
+const execFileAsync = promisify(execFile);
 const { chromium }    = require('playwright');
 const crypto = require('crypto');
 const fs   = require('fs');
@@ -133,7 +135,7 @@ function hotelNameFromSlug(slug) {
   return m ? m[1].replace(/-/g, ' ') : '';
 }
 
-async function fetchCidFromGoogleMaps(hotelName, checkin, checkout) {
+async function fetchCidFromGoogleMaps(hotelName, checkin, _checkout) {
   // Step 1: search Google Maps to get hex place ID
   const searchHtml = execFileSync('curl', [
     '-s', '--fail', '--compressed',
@@ -151,21 +153,40 @@ async function fetchCidFromGoogleMaps(hotelName, checkin, checkout) {
   }
   if (!hexId) throw new Error(`no hex place ID found on Google Maps for: ${hotelName}`);
 
-  // Step 2: call placeupdate API with dates to get booking provider links
+  // Step 2: call placeupdate API with 4 checkin offsets in parallel.
+  // Each attempt uses a 1-night stay (checkout = checkin + 1 day).
+  // Return the first attempt that yields an Agoda cid.
   const [ciY, ciM, ciD] = checkin.split('-').map(Number);
-  const [coY, coM, coD] = checkout.split('-').map(Number);
-  const pb = `!17m9!1m3!1i${ciY}!2i${ciM}!3i${ciD}!2m3!1i${coY}!2i${coM}!3i${coD}!5b1!5m1!1s${encodeURIComponent(hexId)}`;
-  const placeHtml = execFileSync('curl', [
-    '-s', '--fail', '--compressed',
-    '-H', `User-Agent: ${FETCH_UA}`,
-    '-H', 'Accept-Language: zh-TW,zh;q=0.9,en;q=0.8',
-    `https://www.google.com/maps/preview/placeupdate?hl=zh-TW&gl=tw&pb=${pb}`,
-  ], { encoding: 'utf8', maxBuffer: 5 * 1024 * 1024 });
+  const ciBase = new Date(Date.UTC(ciY, ciM - 1, ciD));
 
-  // Step 3: extract Agoda site_id (= cid)
-  const cidMatch = placeHtml.match(/site_id(?:=|%3D)(\d+)/i);
-  if (!cidMatch) throw new Error(`Agoda not listed on Google Maps for: ${hotelName}`);
-  return parseInt(cidMatch[1], 10);
+  const GOOGLE_FALLBACK_CID = 1917614;  // fixed Google partner CID for Agoda
+
+  const results = await Promise.allSettled([0, 15, 30, 60].map(async (offset) => {
+    const ci = new Date(ciBase);
+    ci.setUTCDate(ci.getUTCDate() + offset);
+    const co = new Date(ci);
+    co.setUTCDate(co.getUTCDate() + 1);
+    const pb = [
+      `!17m9!1m3!1i${ci.getUTCFullYear()}!2i${ci.getUTCMonth() + 1}!3i${ci.getUTCDate()}`,
+      `!2m3!1i${co.getUTCFullYear()}!2i${co.getUTCMonth() + 1}!3i${co.getUTCDate()}`,
+      `!5b1!5m1!1s${encodeURIComponent(hexId)}`,
+    ].join('');
+    const { stdout: placeHtml } = await execFileAsync('curl', [
+      '-s', '--fail', '--compressed',
+      '-H', `User-Agent: ${FETCH_UA}`,
+      '-H', 'Accept-Language: zh-TW,zh;q=0.9,en;q=0.8',
+      `https://www.google.com/maps/preview/placeupdate?hl=zh-TW&gl=tw&pb=${pb}`,
+    ], { encoding: 'utf8', maxBuffer: 5 * 1024 * 1024 });
+    const cidMatch = placeHtml.match(/site_id(?:=|%3D)(\d+)/i);
+    if (!cidMatch) throw new Error(`Agoda not listed on Google Maps (offset +${offset})`);
+    return parseInt(cidMatch[1], 10);
+  }));
+
+  for (const r of results) {
+    if (r.status === 'fulfilled') return r.value;
+  }
+  process.stderr.write(`[agoda] google CID not found, using fallback CID ${GOOGLE_FALLBACK_CID}\n`);
+  return GOOGLE_FALLBACK_CID;
 }
 
 // — curl helpers —
