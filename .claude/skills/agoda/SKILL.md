@@ -175,12 +175,30 @@ Returns JSON:
 
 ## Presenting Results
 
-When presenting room prices to the user:
+### Step 1 — Header
+Show hotel name and search criteria (dates, guests, rooms).
 
-1. Show hotel name, search criteria (dates, guests, rooms).
-2. For each room type, show: room name, bed type (`beds`), size (if available), and all offers.
-3. For each offer, show: the benefits, then the price for each partner side by side.
-4. For each partner, link its name to the corresponding URL in `bookingUrls` so the user can proceed to book.
+### Step 2 — Summary table
+Render a one-row-per-room overview using each room's `lowestPrice` field.
+Rooms are already sorted by size ascending in the JSON.
+
+| 房型 | 大小 | 床型 | 最低價 |
+|---|---|---|---|
+| {name} | {size or —} | {beds joined, or —} | {see rules below} |
+
+**Lowest price cell rules:**
+- Link the partner name to `bookingUrls[lowestPrice.partner]`
+- `lowestPrice.cancellable === true` → `[partner](url) TWD X,XXX ✓ 可免費取消`
+- `lowestPrice.cancellable === false` → `[partner](url) TWD X,XXX ✗ 不可取消`; if `lowestCancellablePrice` exists, append on a second line: `可免費取消最低：[partner](url) TWD X,XXX`
+
+### Step 3 — Detailed breakdown
+After the summary, list full offer details for every room:
+
+1. **List every room in the `rooms` array — do not omit any.**
+2. For each room, **list every offer in its `offers` array** — do not skip.
+3. For each offer, show the `benefits` and the price for **every partner key present in `prices`**. Use plain partner names (no links) — the booking links are already in the summary table. If a partner key is absent from `prices`, omit it — do not show a dash or placeholder.
+
+> **Completeness check:** Before finishing, confirm you have presented all `roomCount` rooms.
 
 ---
 

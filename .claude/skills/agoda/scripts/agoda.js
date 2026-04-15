@@ -457,6 +457,29 @@ async function fetchPricesInContext(browser, pageUrl) {
   }
 }
 
+// — Helpers for benefit normalization, size parsing, and price metadata —
+
+// Normalize a benefit string so that semantically identical phrases from different
+// partners produce the same grouping key, e.g.:
+//   "2026年5月19日 星期二前無須付款"  (regular / JCB)
+//   "可延至2026年5月19日 星期二扣款"  (mctaishinbusiness)
+// are treated as the same benefit.
+function normalizeBenefit(b) {
+  b = b.replace(/。$/, '');                            // strip trailing 。
+  b = b.replace(/^可延至(.+?)扣款$/, '$1前無須付款'); // normalize pay-later phrasing
+  return b;
+}
+
+function parseSizeM2(size) {
+  if (!size) return Infinity;
+  const m = size.match(/(\d+)平方公尺/);
+  return m ? parseInt(m[1], 10) : Infinity;
+}
+
+function isCancellable(offer) {
+  return offer.benefits.some(b => b.includes('可免費取消'));
+}
+
 // — Consolidate results from all partners —
 function consolidate(entries, partnerResults) {
   // bookingUrls: one per partner
@@ -479,27 +502,55 @@ function consolidate(entries, partnerResults) {
       if (r) { meta = r; break; }
     }
 
-    // Group offers by sorted benefits key; keep lowest price per partner
+    // Group offers by normalized sorted benefits key; keep lowest price per partner.
+    // Normalization merges semantically identical benefits that differ only in
+    // punctuation or phrasing (e.g. regular vs mctaishinbusiness pay-later wording).
     const offerMap = new Map();
     entries.forEach((partner, idx) => {
       const room = (partnerResults[idx].rooms || []).find(r => r.name === roomName);
       if (!room) return;
       (room.offers || []).forEach(offer => {
-        const key = JSON.stringify([...offer.benefits].sort());
-        if (!offerMap.has(key)) offerMap.set(key, { benefits: offer.benefits, prices: {} });
-        const slot = offerMap.get(key);
+        const normalizedKey = JSON.stringify([...offer.benefits].map(normalizeBenefit).sort());
+        if (!offerMap.has(normalizedKey)) offerMap.set(normalizedKey, { benefits: offer.benefits, prices: {} });
+        const slot = offerMap.get(normalizedKey);
         if (!(partner.key in slot.prices) || offer.price.amount < slot.prices[partner.key])
           slot.prices[partner.key] = offer.price.amount;
       });
     });
 
-    return {
-      name: meta.name,
-      size: meta.size,
-      beds: meta.beds,
-      offers: [...offerMap.values()],
+    const offers = [...offerMap.values()];
+
+    // Compute per-room lowest price metadata.
+    // lowestCancellablePrice is only added when the absolute lowest is non-cancellable.
+    let lowestPrice = Infinity, lowestPartner = null, lowestIsCancellable = false;
+    let lowestCancel = Infinity, lowestCancelPartner = null;
+    for (const offer of offers) {
+      const cancellable = isCancellable(offer);
+      for (const [partner, price] of Object.entries(offer.prices)) {
+        if (price < lowestPrice) {
+          lowestPrice = price; lowestPartner = partner; lowestIsCancellable = cancellable;
+        }
+        if (cancellable && price < lowestCancel) {
+          lowestCancel = price; lowestCancelPartner = partner;
+        }
+      }
+    }
+
+    const room = {
+      name:   meta.name,
+      size:   meta.size,
+      beds:   meta.beds,
+      offers,
+      lowestPrice: { price: lowestPrice, partner: lowestPartner, cancellable: lowestIsCancellable },
     };
+    if (!lowestIsCancellable && lowestCancelPartner) {
+      room.lowestCancellablePrice = { price: lowestCancel, partner: lowestCancelPartner };
+    }
+    return room;
   }).filter(r => r.offers.length > 0);
+
+  // Sort rooms by size ascending; rooms with unknown size go last
+  rooms.sort((a, b) => parseSizeM2(a.size) - parseSizeM2(b.size));
 
   return { bookingUrls, rooms };
 }
@@ -570,7 +621,8 @@ async function modePrice(apiKey) {
       : `${checkin} - ${checkout}, ${adults}人`,
     currency,
     bookingUrls,
-    rooms: consolidatedRooms,
+    roomCount:      consolidatedRooms.length,
+    rooms:          consolidatedRooms,
   };
 
   console.log(JSON.stringify(result, null, 2));
