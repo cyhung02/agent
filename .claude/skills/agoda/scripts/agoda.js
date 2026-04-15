@@ -20,8 +20,8 @@ const os   = require('os');
 const path = require('path');
 
 // — Key cache config —
-const KEY_CACHE_PATH = path.join(os.tmpdir(), 'agoda_apikey.json');
-const KEY_TTL_MS     = 6 * 60 * 60 * 1000; // 6 hours
+const KEY_CACHE_PATH      = path.join(os.tmpdir(), 'agoda_apikey.json');
+const KEY_TTL_MS          = 6 * 60 * 60 * 1000;  // 6 hours
 
 // — Key fetch constants —
 const HOTEL_PAGE = 'https://www.agoda.com/hotel-gracery-shinjuku/hotel/tokyo-jp.html';
@@ -44,10 +44,13 @@ const rooms    = parseInt(get('--rooms')    || '1', 10);
 const currency = (get('--currency') || 'TWD').toUpperCase();
 
 // — Partners: add entries here to include more partner price comparisons —
+// url-based: cid fetched from partner landing page
+// cidFetcher-based: cid fetched dynamically (receives hotelName, checkin, checkout)
 const PARTNERS = [
-  { key: 'regular',          url: 'https://www.agoda.com/zh-tw' },
-  { key: 'jcb',              url: 'https://www.agoda.com/zh-tw/jcbtw' },
+  { key: 'regular',           url: 'https://www.agoda.com/zh-tw' },
+  { key: 'jcb',               url: 'https://www.agoda.com/zh-tw/jcbtw' },
   { key: 'mctaishinbusiness', url: 'https://www.agoda.com/zh-tw/mctaishinbusiness' },
+  { key: 'google',            cidFetcher: fetchCidFromGoogleMaps },
 ];
 
 // — API key: fetch from Agoda JS bundles —
@@ -108,6 +111,48 @@ function fetchCidFromUrl(url) {
   const m = html.match(/"cid":(-?\d+)/);
   if (!m) throw new Error(`cid not found in page: ${url}`);
   return parseInt(m[1], 10);
+}
+
+// — CID: fetch from Google Maps by hotel name + dates —
+function hotelNameFromSlug(slug) {
+  // '/grand-hyatt-taipei/hotel/taipei-tw.html' → 'grand hyatt taipei'
+  const m = slug.match(/^\/([^/]+)\//);
+  return m ? m[1].replace(/-/g, ' ') : '';
+}
+
+function fetchCidFromGoogleMaps(hotelName, checkin, checkout) {
+  // Step 1: search Google Maps to get hex place ID
+  const searchHtml = execFileSync('curl', [
+    '-s', '--fail', '--compressed',
+    '-H', `User-Agent: ${FETCH_UA}`,
+    '-H', 'Accept-Language: zh-TW,zh;q=0.9,en;q=0.8',
+    `https://www.google.com/search?tbm=map&hl=zh-TW&gl=tw&q=${encodeURIComponent(hotelName)}`,
+  ], { encoding: 'utf8', maxBuffer: 5 * 1024 * 1024 });
+
+  // Skip 0x0:0x... noise entries; take first with a real (non-zero) first part
+  const hexRe = /0x[0-9a-f]+:0x[0-9a-f]+/g;
+  let hexId = null;
+  let m;
+  while ((m = hexRe.exec(searchHtml)) !== null) {
+    if (!m[0].startsWith('0x0:')) { hexId = m[0]; break; }
+  }
+  if (!hexId) throw new Error(`no hex place ID found on Google Maps for: ${hotelName}`);
+
+  // Step 2: call placeupdate API with dates to get booking provider links
+  const [ciY, ciM, ciD] = checkin.split('-').map(Number);
+  const [coY, coM, coD] = checkout.split('-').map(Number);
+  const pb = `!17m9!1m3!1i${ciY}!2i${ciM}!3i${ciD}!2m3!1i${coY}!2i${coM}!3i${coD}!5b1!5m1!1s${encodeURIComponent(hexId)}`;
+  const placeHtml = execFileSync('curl', [
+    '-s', '--fail', '--compressed',
+    '-H', `User-Agent: ${FETCH_UA}`,
+    '-H', 'Accept-Language: zh-TW,zh;q=0.9,en;q=0.8',
+    `https://www.google.com/maps/preview/placeupdate?hl=zh-TW&gl=tw&pb=${pb}`,
+  ], { encoding: 'utf8', maxBuffer: 5 * 1024 * 1024 });
+
+  // Step 3: extract Agoda site_id (= cid)
+  const cidMatch = placeHtml.match(/site_id=(\d+)/);
+  if (!cidMatch) throw new Error(`Agoda not listed on Google Maps for: ${hotelName}`);
+  return parseInt(cidMatch[1], 10);
 }
 
 // — curl helpers —
@@ -373,20 +418,44 @@ async function modePrice(apiKey) {
   }
 
   process.stderr.write('[agoda] fetching hotel page url and partner cids...\n');
-  const [cityId, ...partnerCids] = await Promise.all([
+
+  const urlPartners = PARTNERS.filter(p => p.url);
+  const dynPartners = PARTNERS.filter(p => p.cidFetcher);
+
+  // Step 1: parallel — cityId + url-based partner cids
+  const [cityId, ...urlCids] = await Promise.all([
     Promise.resolve(getCityId(apiKey)),
-    ...PARTNERS.map(p => Promise.resolve(fetchCidFromUrl(p.url))),
+    ...urlPartners.map(p => Promise.resolve(fetchCidFromUrl(p.url))),
   ]);
   if (!cityId) { console.error('Error: could not resolve cityId for property', idArg); process.exit(1); }
 
+  // Step 2: get slug (needs cityId)
   const slug = getPropertySlug(cityId, apiKey);
   if (!slug) { console.error('Error: could not resolve page slug for property', idArg); process.exit(1); }
 
-  const los      = Math.round((new Date(checkout) - new Date(checkin)) / (1000 * 60 * 60 * 24));
-  const baseUrl  = `https://www.agoda.com/zh-tw${slug}?checkIn=${checkin}&los=${los}&adults=${adults}&children=${children}&rooms=${rooms}&currencyCode=${currency}`;
-  const entries  = PARTNERS.map((p, i) => ({ key: p.key, url: `${baseUrl}&cid=${partnerCids[i]}` }));
+  const los     = Math.round((new Date(checkout) - new Date(checkin)) / (1000 * 60 * 60 * 24));
+  const baseUrl = `https://www.agoda.com/zh-tw${slug}?checkIn=${checkin}&los=${los}&adults=${adults}&children=${children}&rooms=${rooms}&currencyCode=${currency}`;
 
-  const cidLog = PARTNERS.map((p, i) => `${p.key}=${partnerCids[i]}`).join(', ');
+  // Step 3: fetch dynamic cids (google) using hotel name derived from slug
+  const hotelName = hotelNameFromSlug(slug);
+  const cidByKey = {};
+  urlPartners.forEach((p, i) => { cidByKey[p.key] = urlCids[i]; });
+  await Promise.all(
+    dynPartners.map(async p => {
+      try {
+        cidByKey[p.key] = p.cidFetcher(hotelName, checkin, checkout);
+      } catch (e) {
+        process.stderr.write(`[agoda] warning: skipping ${p.key} — ${e.message}\n`);
+      }
+    })
+  );
+
+  // Build entries in PARTNERS order, excluding any that failed
+  const entries = PARTNERS
+    .filter(p => p.key in cidByKey)
+    .map(p => ({ key: p.key, url: `${baseUrl}&cid=${cidByKey[p.key]}` }));
+
+  const cidLog = entries.map(e => `${e.key}=${cidByKey[e.key]}`).join(', ');
   process.stderr.write(`[agoda] launching browsers in parallel (${cidLog})...\n`);
 
   const dataArr = await Promise.all(
@@ -394,7 +463,7 @@ async function modePrice(apiKey) {
   );
 
   dataArr.forEach((d, i) => {
-    if (!d) { console.error(`Error: propertyPageParams not found (${PARTNERS[i].key})`); process.exit(1); }
+    if (!d) { console.error(`Error: propertyPageParams not found (${entries[i].key})`); process.exit(1); }
   });
 
   const first      = dataArr[0];
