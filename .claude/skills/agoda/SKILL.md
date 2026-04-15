@@ -42,11 +42,17 @@ If genuinely ambiguous, present the top candidates and ask the user to confirm.
 
 ---
 
-## Step 2 — Prerequisite: `playwright-cli` (headed browser)
+## Step 2 — Prerequisite: `playwright` npm package (headed browser)
 
-The price lookup requires `playwright-cli` and launches the browser in **headed mode** (passes `--headed` to `playwright-cli open`). Agoda actively blocks headless browsers.
+The price lookup uses the **playwright** Node.js API and launches Chrome in headed mode (`headless: false`). Agoda actively blocks headless browsers.
 
-If `playwright-cli` is not installed or not working, follow the **playwright-cli** skill to set it up. The script will also exit with a clear error if `playwright-cli` is missing.
+If `playwright` is not installed, run:
+
+```bash
+npm install playwright
+```
+
+The script reads `HTTP_PROXY` / `http_proxy` from the environment for proxy settings and sets `chromiumSandbox: false` automatically.
 
 ---
 
