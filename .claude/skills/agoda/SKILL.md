@@ -8,9 +8,23 @@ allowed-tools: Bash
 
 A single script `agoda.js` handles both hotel lookup and room prices. Mode is auto-detected from arguments.
 
-## Step 0 — Locate the Script
+## Step 0 — Install Dependencies (first run only)
 
-Before running any commands, use the **find-skill-script** skill to resolve the absolute path of `agoda.js` under the `scripts/` subdirectory.
+Use the **find-skill-script** skill to resolve the absolute path of `install-agoda.sh` under the `scripts/` subdirectory.
+
+Then check if `node_modules` already exists in the skill root (one level above `scripts/`). If not, run the install script:
+
+```bash
+bash <install-agoda.sh path>
+```
+
+This installs the `playwright` Node.js API package locally under the skill directory. It is safe to skip if `node_modules` is already present.
+
+---
+
+## Step 1 — Locate the Script
+
+Use the **find-skill-script** skill to resolve the absolute path of `agoda.js` under the `scripts/` subdirectory.
 
 Use the returned absolute path in all subsequent `node` commands.
 
@@ -56,7 +70,7 @@ The script reads `HTTP_PROXY` / `http_proxy` from the environment for proxy sett
 
 ### No X Server (headless Linux environments)
 
-The script requires `$DISPLAY` to be set. On environments without a display server, use `xvfb-run` to provide a virtual display:
+On **Linux/macOS**, the script requires `$DISPLAY` to be set. On environments without a display server, use `xvfb-run` to provide a virtual display:
 
 ```bash
 xvfb-run -a node <agoda.js path> --id 621491 --checkin 2026-06-01 --checkout 2026-06-02 --adults 2
@@ -67,6 +81,8 @@ To check whether you need this:
 ```bash
 [ -z "$DISPLAY" ] && echo "no X Server — use xvfb-run -a" || echo "X Server present"
 ```
+
+On **Windows**, `$DISPLAY` is not required — Playwright uses native rendering directly.
 
 ---
 

@@ -379,7 +379,7 @@ function getPropertySlug(cityId, apiKey) {
 // — Browser price extraction —
 
 function buildLaunchOptions() {
-  if (!process.env.DISPLAY) {
+  if (process.platform !== 'win32' && !process.env.DISPLAY) {
     console.error(
       'Error: no X Server detected ($DISPLAY not set).\n' +
       'Run with: xvfb-run -a node agoda.js ...'
