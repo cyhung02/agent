@@ -74,8 +74,10 @@ function fetchApiKey() {
   if (!pairs.length) throw new Error('chunk map not found in property bundle');
 
   const chunkUrls  = pairs.map(([, id, hash]) => `${CDN_BASE}${id}-${hash}.js`);
-  const configPath = path.join(os.tmpdir(), `agoda_chunks_${Date.now()}.txt`);
+  const configPath = path.join(os.tmpdir(), `agoda_chunks_${process.pid}_${Date.now()}.txt`);
   fs.writeFileSync(configPath, chunkUrls.map(u => `url = "${u}"`).join('\nnext\n'));
+
+  function cleanup() { try { fs.unlinkSync(configPath); } catch {} }
 
   return new Promise((resolve, reject) => {
     const child = spawn('curl', [
@@ -90,9 +92,9 @@ function fetchApiKey() {
       if (m) { found = true; child.kill('SIGTERM'); resolve(m[1]); return; }
       if (tail.length > TAIL_SIZE) tail = tail.slice(-TAIL_SIZE);
     });
-    child.on('error', reject);
+    child.on('error', (err) => { cleanup(); reject(err); });
     child.on('close', () => {
-      try { fs.unlinkSync(configPath); } catch {}
+      cleanup();
       if (!found) reject(new Error('apiKey not found in any chunk'));
     });
   });
@@ -124,7 +126,7 @@ function hotelNameFromSlug(slug) {
   return m ? m[1].replace(/-/g, ' ') : '';
 }
 
-function fetchCidFromGoogleMaps(hotelName, checkin, checkout) {
+async function fetchCidFromGoogleMaps(hotelName, checkin, checkout) {
   // Step 1: search Google Maps to get hex place ID
   const searchHtml = execFileSync('curl', [
     '-s', '--fail', '--compressed',
@@ -183,12 +185,13 @@ function curlGet(url, apiKey) {
   return JSON.parse(raw);
 }
 
-function curlPost(url, body, referer, apiKey) {
+function curlPost(url, body, referer, apiKey, extraHeaders = []) {
   const raw = execFileSync('curl', [
     '-s', '--fail', '--compressed', '-X', 'POST',
     '-H', 'Content-Type: application/json',
     '-H', `Referer: ${referer}`,
     ...buildHeaders(apiKey),
+    ...extraHeaders,
     '--data', JSON.stringify(body),
     url,
   ], { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 });
@@ -228,16 +231,126 @@ function modeSuggest(apiKey) {
   console.log(JSON.stringify({ candidates }, null, 2));
 }
 
-// — Price mode —
-function getCityId(apiKey) {
-  const body = {
-    pageSessionId: '', clientApplicationName: 'capybara', pricingRequest: {},
-    userContext: { priceStrategy: 101, firstDownloadVersion: '6_0', currencyId: 28, currencyDisplayType: 3, cmsMode: 0, mseHotelIds: [], pointsMaxId: 0 },
+// — API Payload builders —
+
+function buildRoomGridBody({ propertyId, checkin, checkout, rooms, adults, children }) {
+  return {
+    pageSessionId: '',
+    clientApplicationName: 'capybara',
+    pricingRequest: {},
+    userContext: {
+      priceStrategy: 101,
+      firstDownloadVersion: '6_0',
+      currencyId: 28,
+      currencyDisplayType: 3,
+      cmsMode: 0,
+      mseHotelIds: [],
+      pointsMaxId: 0,
+    },
     userState: { currentFunnel: 'regular', loyalty: { pastBookingsLevel: -1 } },
-    propertyId: String(idArg),
+    propertyId: String(propertyId),
     fields: ['rateCategory'],
     searchCriteria: { checkIn: checkin, checkOut: checkout, rooms, adults, children },
   };
+}
+
+function buildCitySearchBody({ cityId, checkin, checkout, rooms, adults, children, currency, propertyId }) {
+  const userId      = crypto.randomUUID();
+  const checkInIso  = `${checkin}T00:00:00.000Z`;
+  return {
+    operationName: 'citySearch',
+    variables: {
+      CitySearchRequest: { cityId, searchRequest: {
+        searchCriteria: {
+          isAllowBookOnRequest: false,
+          bookingDate: new Date().toISOString(),
+          checkInDate: checkInIso,
+          localCheckInDate: checkin,
+          los: 1,
+          rooms, adults, children,
+          childAges: [], ratePlans: [],
+          featureFlagRequest: {
+            fetchNamesForTealium: false, fiveStarDealOfTheDay: false,
+            isAllowBookOnRequest: false, showUnAvailable: false,
+            showRemainingProperties: false, isMultiHotelSearch: false,
+            enableAgencySupplyForPackages: false, flags: [],
+            enablePageToken: false, enableDealsOfTheDayFilter: false,
+            isEnableSupplierFinancialInfo: false, citySearchIgnoreRoomsCountForNha: false,
+            isFlexibleMultiRoomSearch: false, enableLuxuryHotelTSP: false,
+          },
+          isUserLoggedIn: false,
+          currency,
+          travellerType: adults === 1 ? 'Solo' : 'Couple',
+          isAPSPeek: false,
+          enableOpaqueChannel: false,
+          isEnabledPartnerChannelSelection: null,
+          sorting: { sortField: 'Ranking', sortOrder: 'Desc', sortParams: null },
+          requiredBasis: 'PRPN',
+          requiredPrice: 'Exclusive',
+          suggestionLimit: 0,
+          synchronous: false,
+          supplierPullMetadataRequest: null,
+          isRoomSuggestionRequested: false,
+          isAPORequest: false,
+          hasAPOFilter: false,
+        },
+        searchContext: {
+          userId, memberId: 0, locale: 'zh-tw', cid: -1, origin: 'TW',
+          platform: 1, deviceTypeId: 1,
+          experiments: { forceByVariant: null, forceByExperiment: [] },
+          isRetry: false, showCMS: false, storeFrontId: 3, pageTypeId: 103,
+          whiteLabelKey: null, ipAddress: '', endpointSearchType: 'CitySearch',
+          trackSteps: null, searchId: crypto.randomUUID(),
+        },
+        matrix: null, matrixGroup: [],
+        filterRequest: { idsFilters: [], rangeFilters: [], textFilters: [] },
+        page: { pageSize: 1, pageNumber: 1, pageToken: '' },
+        apoRequest: { apoPageSize: 0 },
+        extraHotels: { extraHotelIds: [parseInt(propertyId, 10)], enableFiltersForExtraHotels: false },
+        rankingRequest: { isNhaKeywordSearch: false },
+      }},
+      ContentSummaryRequest: {
+        context: {
+          rawUserId: userId, memberId: 0, userOrigin: 'TW', locale: 'zh-tw',
+          forceExperimentsByIdNew: [], apo: false,
+          searchCriteria: { cityId },
+          platform: { id: 1 }, storeFrontId: 3, cid: '-1',
+          occupancy: { numberOfAdults: adults, numberOfChildren: children, travelerType: 0, checkIn: checkInIso },
+          deviceTypeId: 1, whiteLabelKey: '', correlationId: '',
+        },
+        summary: { highlightedFeaturesOrderPriority: null, includeHotelCharacter: false },
+        reviews: {
+          commentary: null,
+          demographics: { providerIds: null, filter: { defaultProviderOnly: true } },
+          summaries: { providerIds: null, apo: false, limit: 0, travellerType: 0 },
+          cumulative: { providerIds: null },
+          filters: null,
+        },
+        images: { page: null, maxWidth: 0, maxHeight: 0, imageSizes: null, indexOffset: null },
+        rooms: {
+          images: null, featureLimit: 0, filterCriteria: null,
+          includeMissing: false, includeSoldOut: false, includeDmcRoomId: false,
+          soldOutRoomCriteria: null, showRoomSize: false, showRoomFacilities: false, showRoomName: false,
+        },
+        nonHotelAccommodation: false,
+        engagement: false,
+        highlights: { maxNumberOfItems: 0, images: { imageSizes: [] } },
+        personalizedInformation: false,
+        localInformation: { images: null },
+        features: null,
+        rateCategories: false,
+        contentRateCategories: { escapeRateCategories: {} },
+        synopsis: false,
+      },
+    },
+    query: `query citySearch($CitySearchRequest: CitySearchRequest!, $ContentSummaryRequest: ContentSummaryRequest!) { citySearch(CitySearchRequest: $CitySearchRequest) { properties(ContentSummaryRequest: $ContentSummaryRequest) { propertyId content { informationSummary { propertyLinks { propertyPage } } } } } }`,
+  };
+}
+
+// — Price mode —
+
+function getCityId(apiKey) {
+  const body = buildRoomGridBody({ propertyId: idArg, checkin, checkout, rooms, adults, children });
   try {
     const data = curlPost('https://www.agoda.com/api/v1/property/room-grid', body, 'https://www.agoda.com/hotel/tokyo-jp.html', apiKey);
     return data.cityId || 0;
@@ -247,31 +360,13 @@ function getCityId(apiKey) {
 }
 
 function getPropertySlug(cityId, apiKey) {
-  const userId = crypto.randomUUID();
-  const body = {
-    operationName: 'citySearch',
-    variables: {
-      CitySearchRequest: { cityId, searchRequest: {
-        searchCriteria: { isAllowBookOnRequest: false, bookingDate: new Date().toISOString(), checkInDate: `${checkin}T00:00:00.000Z`, localCheckInDate: checkin, los: 1, rooms, adults, children, childAges: [], ratePlans: [], featureFlagRequest: { fetchNamesForTealium: false, fiveStarDealOfTheDay: false, isAllowBookOnRequest: false, showUnAvailable: false, showRemainingProperties: false, isMultiHotelSearch: false, enableAgencySupplyForPackages: false, flags: [], enablePageToken: false, enableDealsOfTheDayFilter: false, isEnableSupplierFinancialInfo: false, citySearchIgnoreRoomsCountForNha: false, isFlexibleMultiRoomSearch: false, enableLuxuryHotelTSP: false }, isUserLoggedIn: false, currency, travellerType: adults === 1 ? 'Solo' : 'Couple', isAPSPeek: false, enableOpaqueChannel: false, isEnabledPartnerChannelSelection: null, sorting: { sortField: 'Ranking', sortOrder: 'Desc', sortParams: null }, requiredBasis: 'PRPN', requiredPrice: 'Exclusive', suggestionLimit: 0, synchronous: false, supplierPullMetadataRequest: null, isRoomSuggestionRequested: false, isAPORequest: false, hasAPOFilter: false },
-        searchContext: { userId, memberId: 0, locale: 'zh-tw', cid: -1, origin: 'TW', platform: 1, deviceTypeId: 1, experiments: { forceByVariant: null, forceByExperiment: [] }, isRetry: false, showCMS: false, storeFrontId: 3, pageTypeId: 103, whiteLabelKey: null, ipAddress: '', endpointSearchType: 'CitySearch', trackSteps: null, searchId: crypto.randomUUID() },
-        matrix: null, matrixGroup: [], filterRequest: { idsFilters: [], rangeFilters: [], textFilters: [] }, page: { pageSize: 1, pageNumber: 1, pageToken: '' }, apoRequest: { apoPageSize: 0 }, extraHotels: { extraHotelIds: [parseInt(idArg, 10)], enableFiltersForExtraHotels: false }, rankingRequest: { isNhaKeywordSearch: false },
-      }},
-      ContentSummaryRequest: { context: { rawUserId: userId, memberId: 0, userOrigin: 'TW', locale: 'zh-tw', forceExperimentsByIdNew: [], apo: false, searchCriteria: { cityId }, platform: { id: 1 }, storeFrontId: 3, cid: '-1', occupancy: { numberOfAdults: adults, numberOfChildren: children, travelerType: 0, checkIn: `${checkin}T00:00:00.000Z` }, deviceTypeId: 1, whiteLabelKey: '', correlationId: '' }, summary: { highlightedFeaturesOrderPriority: null, includeHotelCharacter: false }, reviews: { commentary: null, demographics: { providerIds: null, filter: { defaultProviderOnly: true } }, summaries: { providerIds: null, apo: false, limit: 0, travellerType: 0 }, cumulative: { providerIds: null }, filters: null }, images: { page: null, maxWidth: 0, maxHeight: 0, imageSizes: null, indexOffset: null }, rooms: { images: null, featureLimit: 0, filterCriteria: null, includeMissing: false, includeSoldOut: false, includeDmcRoomId: false, soldOutRoomCriteria: null, showRoomSize: false, showRoomFacilities: false, showRoomName: false }, nonHotelAccommodation: false, engagement: false, highlights: { maxNumberOfItems: 0, images: { imageSizes: [] } }, personalizedInformation: false, localInformation: { images: null }, features: null, rateCategories: false, contentRateCategories: { escapeRateCategories: {} }, synopsis: false },
-    },
-    query: `query citySearch($CitySearchRequest: CitySearchRequest!, $ContentSummaryRequest: ContentSummaryRequest!) { citySearch(CitySearchRequest: $CitySearchRequest) { properties(ContentSummaryRequest: $ContentSummaryRequest) { propertyId content { informationSummary { propertyLinks { propertyPage } } } } } }`,
-  };
-
+  const body = buildCitySearchBody({ cityId, checkin, checkout, rooms, adults, children, currency, propertyId: idArg });
   try {
-    const raw = execFileSync('curl', [
-      '-s', '--fail', '--compressed', '-X', 'POST',
-      '-H', 'Content-Type: application/json',
-      '-H', 'Referer: https://www.agoda.com/',
-      '-H', 'ag-page-type-id: 103',
-      ...buildHeaders(apiKey),
-      '--data', JSON.stringify(body),
+    const data = curlPost(
       'https://www.agoda.com/graphql/search',
-    ], { encoding: 'utf8', maxBuffer: 5 * 1024 * 1024 });
-    const data  = JSON.parse(raw);
+      body, 'https://www.agoda.com/', apiKey,
+      ['-H', 'ag-page-type-id: 103'],
+    );
     const props = data?.data?.citySearch?.properties || [];
     const prop  = props.find(p => String(p.propertyId) === String(idArg));
     return prop?.content?.informationSummary?.propertyLinks?.propertyPage || null;
@@ -294,13 +389,16 @@ function pwAsync(session, ...pwArgs) {
 }
 
 const WAIT_SCRIPT = `(function() {
-  var deadline = Date.now() + 10000;
-  function check() {
-    var p = window.propertyPageParams;
-    if (p && p.roomGridData && p.roomGridData.masterRooms) return;
-    if (Date.now() < deadline) setTimeout(check, 200);
-  }
-  check();
+  return new Promise(function(resolve, reject) {
+    var deadline = Date.now() + 10000;
+    function check() {
+      var p = window.propertyPageParams;
+      if (p && p.roomGridData && p.roomGridData.masterRooms) { resolve(); return; }
+      if (Date.now() >= deadline) { reject(new Error('timeout waiting for propertyPageParams')); return; }
+      setTimeout(check, 200);
+    }
+    check();
+  });
 })()`;
 
 const EVAL_SCRIPT = `(function() {
@@ -381,7 +479,7 @@ function consolidate(entries, partnerResults) {
     // Room metadata from first partner that has it
     let meta = null;
     for (const partnerData of partnerResults) {
-      const r = (partnerData.rooms || []).find(r => r.name === roomName);
+      const r = (partnerData.rooms || []).find(room => room.name === roomName);
       if (r) { meta = r; break; }
     }
 
@@ -449,7 +547,7 @@ async function modePrice(apiKey) {
   await Promise.all(
     dynPartners.map(async p => {
       try {
-        cidByKey[p.key] = p.cidFetcher(hotelName, checkin, checkout);
+        cidByKey[p.key] = await p.cidFetcher(hotelName, checkin, checkout);
       } catch (e) {
         process.stderr.write(`[agoda] warning: skipping ${p.key} — ${e.message}\n`);
       }
@@ -464,13 +562,17 @@ async function modePrice(apiKey) {
   const cidLog = entries.map(e => `${e.key}=${cidByKey[e.key]}`).join(', ');
   process.stderr.write(`[agoda] launching browsers in parallel (${cidLog})...\n`);
 
-  const partnerResults = await Promise.all(
+  const settled = await Promise.allSettled(
     entries.map(e => getPricesViaBrowser(`agoda-${e.key}`, e.url))
   );
-
-  partnerResults.forEach((d, i) => {
-    if (!d) { console.error(`Error: propertyPageParams not found (${entries[i].key})`); process.exit(1); }
-  });
+  const failures = settled
+    .map((r, i) => ({ ...r, key: entries[i].key }))
+    .filter(r => r.status === 'rejected');
+  if (failures.length > 0) {
+    for (const f of failures) console.error(`Error (${f.key}): ${f.reason?.message || f.reason}`);
+    process.exit(1);
+  }
+  const partnerResults = settled.map(r => r.value);
 
   const first      = partnerResults[0];
   const { bookingUrls, rooms: consolidatedRooms } = consolidate(entries, partnerResults);
