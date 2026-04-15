@@ -379,6 +379,13 @@ function getPropertySlug(cityId, apiKey) {
 // — Browser price extraction —
 
 function buildLaunchOptions() {
+  if (!process.env.DISPLAY) {
+    console.error(
+      'Error: no X Server detected ($DISPLAY not set).\n' +
+      'Run with: xvfb-run -a node agoda.js ...'
+    );
+    process.exit(1);
+  }
   const proxyUrl = process.env.HTTP_PROXY || process.env.http_proxy || '';
   let proxy;
   if (proxyUrl) {

@@ -54,6 +54,20 @@ npm install -g playwright
 
 The script reads `HTTP_PROXY` / `http_proxy` from the environment for proxy settings and sets `chromiumSandbox: false` automatically.
 
+### No X Server (headless Linux environments)
+
+The script requires `$DISPLAY` to be set. On environments without a display server, use `xvfb-run` to provide a virtual display:
+
+```bash
+xvfb-run -a node <agoda.js path> --id 621491 --checkin 2026-06-01 --checkout 2026-06-02 --adults 2
+```
+
+To check whether you need this:
+
+```bash
+[ -z "$DISPLAY" ] && echo "no X Server — use xvfb-run -a" || echo "X Server present"
+```
+
 ---
 
 ## Step 3 — Get Room Prices
