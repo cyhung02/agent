@@ -18,7 +18,7 @@
 
 'use strict';
 
-const { execFileSync, execFile, spawn } = require('child_process');
+const { execFile, spawn } = require('child_process');
 const { promisify } = require('util');
 const execFileAsync = promisify(execFile);
 const { chromium }    = require('playwright');
@@ -76,18 +76,19 @@ const PARTNERS = [
 ];
 
 // — API key: fetch from Agoda JS bundles —
-function curlGetRaw(url) {
-  return execFileSync('curl', [
+async function curlGetRaw(url) {
+  const { stdout } = await execFileAsync('curl', [
     '-s', '--fail', '--compressed', '-H', `User-Agent: ${FETCH_UA}`, url,
   ], { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 });
+  return stdout;
 }
 
-function fetchApiKey() {
-  const html      = curlGetRaw(HOTEL_PAGE);
+async function fetchApiKey() {
+  const html      = await curlGetRaw(HOTEL_PAGE);
   const propMatch = html.match(/(property-[a-f0-9]+\.js)/);
   if (!propMatch) throw new Error('property-*.js bundle not found in HTML');
 
-  const propJs = curlGetRaw(CDN_BASE + propMatch[1]);
+  const propJs = await curlGetRaw(CDN_BASE + propMatch[1]);
   const pairs  = [...propJs.matchAll(/([0-9]+):"([a-f0-9]{4,})"/g)];
   if (!pairs.length) throw new Error('chunk map not found in property bundle');
 
@@ -130,8 +131,8 @@ async function getApiKey() {
 }
 
 // — CID: fetch from partner landing page —
-function fetchCidFromUrl(url) {
-  const html = curlGetRaw(url);
+async function fetchCidFromUrl(url) {
+  const html = await curlGetRaw(url);
   const m = html.match(/"cid":(-?\d+)/);
   if (!m) throw new Error(`cid not found in page: ${url}`);
   return parseInt(m[1], 10);
@@ -146,7 +147,7 @@ function hotelNameFromSlug(slug) {
 
 async function fetchCidFromGoogleMaps(hotelName, checkin, _checkout) {
   // Step 1: search Google Maps to get hex place ID
-  const searchHtml = execFileSync('curl', [
+  const { stdout: searchHtml } = await execFileAsync('curl', [
     '-s', '--fail', '--compressed',
     '-H', `User-Agent: ${FETCH_UA}`,
     '-H', 'Accept-Language: zh-TW,zh;q=0.9,en;q=0.8',
@@ -170,7 +171,7 @@ async function fetchCidFromGoogleMaps(hotelName, checkin, _checkout) {
 
   const GOOGLE_FALLBACK_CID = 1917614;  // fixed Google partner CID for Agoda
 
-  const results = await Promise.allSettled([0, 15, 30, 60].map(async (offset) => {
+  const results = await Promise.allSettled([0, 30].map(async (offset) => {
     const ci = new Date(ciBase);
     ci.setUTCDate(ci.getUTCDate() + offset);
     const co = new Date(ci);
@@ -213,17 +214,17 @@ function buildHeaders(apiKey) {
   ];
 }
 
-function curlGet(url, apiKey) {
-  const raw = execFileSync('curl', [
+async function curlGet(url, apiKey) {
+  const { stdout } = await execFileAsync('curl', [
     '-s', '--fail', '--compressed',
     '-H', 'Referer: https://www.agoda.com/',
     ...buildHeaders(apiKey), url,
   ], { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 });
-  return JSON.parse(raw);
+  return JSON.parse(stdout);
 }
 
-function curlPost(url, body, referer, apiKey, extraHeaders = []) {
-  const raw = execFileSync('curl', [
+async function curlPost(url, body, referer, apiKey, extraHeaders = []) {
+  const { stdout } = await execFileAsync('curl', [
     '-s', '--fail', '--compressed', '-X', 'POST',
     '-H', 'Content-Type: application/json',
     '-H', `Referer: ${referer}`,
@@ -232,16 +233,16 @@ function curlPost(url, body, referer, apiKey, extraHeaders = []) {
     '--data', JSON.stringify(body),
     url,
   ], { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 });
-  return JSON.parse(raw);
+  return JSON.parse(stdout);
 }
 
 // — Suggest mode —
-function modeSuggest(apiKey) {
+async function modeSuggest(apiKey) {
   const url = `https://www.agoda.com/api/cronos/search/GetUnifiedSuggestResult/3/20/20/0/zh-tw/?searchText=${encodeURIComponent(nameArg)}&isHotelSearch=true`;
 
   let data;
   try {
-    data = curlGet(url, apiKey);
+    data = await curlGet(url, apiKey);
   } catch (e) {
     console.error('Error fetching suggestions:', e.message);
     process.exit(1);
@@ -386,20 +387,20 @@ function buildCitySearchBody({ cityId, checkin, checkout, rooms, adults, childre
 
 // — Price mode —
 
-function getCityId(apiKey) {
+async function getCityId(apiKey) {
   const body = buildRoomGridBody({ propertyId: idArg, checkin, checkout, rooms, adults, children });
   try {
-    const data = curlPost('https://www.agoda.com/api/v1/property/room-grid', body, 'https://www.agoda.com/hotel/tokyo-jp.html', apiKey);
+    const data = await curlPost('https://www.agoda.com/api/v1/property/room-grid', body, 'https://www.agoda.com/hotel/tokyo-jp.html', apiKey);
     return data.cityId || 0;
   } catch {
     return 0;
   }
 }
 
-function getPropertySlug(cityId, apiKey) {
+async function getPropertySlug(cityId, apiKey) {
   const body = buildCitySearchBody({ cityId, checkin, checkout, rooms, adults, children, currency, propertyId: idArg });
   try {
-    const data = curlPost(
+    const data = await curlPost(
       'https://www.agoda.com/graphql/search',
       body, 'https://www.agoda.com/', apiKey,
       ['-H', 'ag-page-type-id: 103'],
@@ -625,33 +626,34 @@ async function modePrice(apiKey) {
   const urlPartners = PARTNERS.filter(p => p.url);
   const dynPartners = PARTNERS.filter(p => p.cidFetcher);
 
-  // Step 1: parallel — cityId + url-based partner cids
-  const [cityId, ...urlCids] = await Promise.all([
-    getCityId(apiKey),
-    ...urlPartners.map(p => fetchCidFromUrl(p.url)),
-  ]);
+  // Fire URL CID fetches immediately — independent of the cityId/slug chain
+  const urlCidsPromise = Promise.all(urlPartners.map(p => fetchCidFromUrl(p.url)));
+
+  // Sequential chain: cityId → slug (now truly async, runs in parallel with urlCidsPromise)
+  const cityId = await getCityId(apiKey);
   if (!cityId) { console.error('Error: could not resolve cityId for property', idArg); process.exit(1); }
 
-  // Step 2: get slug (needs cityId)
-  const slug = getPropertySlug(cityId, apiKey);
+  const slug = await getPropertySlug(cityId, apiKey);
   if (!slug) { console.error('Error: could not resolve page slug for property', idArg); process.exit(1); }
 
   const los     = Math.round((new Date(checkout) - new Date(checkin)) / (1000 * 60 * 60 * 24));
   const baseUrl = `https://www.agoda.com/zh-tw${slug}?checkIn=${checkin}&los=${los}&adults=${adults}&children=${children}&rooms=${rooms}&currencyCode=${currency}`;
 
-  // Step 3: fetch dynamic cids (google) using hotel name derived from slug
   const hotelName = hotelNameFromSlug(slug);
+
+  // Fetch dynamic CIDs (google) and wait for URL CIDs in parallel
+  const [dynCidResults, urlCids] = await Promise.all([
+    Promise.allSettled(dynPartners.map(p => p.cidFetcher(hotelName, checkin, checkout))),
+    urlCidsPromise,
+  ]);
+
   const cidByKey = {};
   urlPartners.forEach((p, i) => { cidByKey[p.key] = urlCids[i]; });
-  await Promise.all(
-    dynPartners.map(async p => {
-      try {
-        cidByKey[p.key] = await p.cidFetcher(hotelName, checkin, checkout);
-      } catch (e) {
-        process.stderr.write(`[agoda] warning: skipping ${p.key} — ${e.message}\n`);
-      }
-    })
-  );
+  dynPartners.forEach((p, i) => {
+    const r = dynCidResults[i];
+    if (r.status === 'fulfilled') cidByKey[p.key] = r.value;
+    else process.stderr.write(`[agoda] warning: skipping ${p.key} — ${r.reason?.message}\n`);
+  });
 
   // Build entries in PARTNERS order, excluding any that failed
   const entries = PARTNERS
@@ -695,7 +697,7 @@ async function modePrice(apiKey) {
 async function main() {
   if (nameArg) {
     const apiKey = await getApiKey();
-    modeSuggest(apiKey);
+    await modeSuggest(apiKey);
   } else if (idArg && checkin && checkout) {
     const apiKey = await getApiKey();
     await modePrice(apiKey);
