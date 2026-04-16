@@ -507,9 +507,21 @@ function isCancellable(offer) {
   return offer.benefits.some(b => b.includes('可免費取消'));
 }
 
-function hasMeal(offer) {
-  return offer.benefits.some(b => /早餐|含餐|用餐/.test(b));
+function hasDinner(offer) {
+  return offer.benefits.some(b => /晚餐|一泊二食/.test(b));
 }
+
+function hasBreakfast(offer) {
+  return offer.benefits.some(b => /早餐/.test(b));
+}
+
+function getMealCategory(offer) {
+  if (hasDinner(offer)) return 'withDinner';
+  if (hasBreakfast(offer)) return 'withBreakfast';
+  return 'noMeal';
+}
+
+const MEAL_CATEGORIES = ['noMeal', 'withBreakfast', 'withDinner'];
 
 // — Consolidate results from all partners —
 function consolidate(entries, partnerResults) {
@@ -551,32 +563,39 @@ function consolidate(entries, partnerResults) {
       return { name: meta.name, size: meta.size, beds: meta.beds, offers: [...offerMap.values()] };
     }
 
-    // Default mode: cheapest offer across all partners for each of the 4 categories
-    const best = {
-      noMeal_nonCancellable:   null,
-      noMeal_cancellable:      null,
-      withMeal_nonCancellable: null,
-      withMeal_cancellable:    null,
-    };
+    // Default mode: for each meal category (noMeal / withBreakfast / withDinner),
+    // emit the cheapest offer; if it is non-cancellable, also emit the cheapest
+    // cancellable offer in that category.
+    const cheapestByCategory  = {};
+    const cheapestCancellable = {};
 
     entries.forEach((partner, idx) => {
       const room = (partnerResults[idx].rooms || []).find(r => r.name === roomName);
       if (!room) return;
       (room.offers || []).forEach(offer => {
-        const key   = `${hasMeal(offer) ? 'withMeal' : 'noMeal'}_${isCancellable(offer) ? 'cancellable' : 'nonCancellable'}`;
-        const price = offer.price.amount;
-        if (!best[key] || price < best[key].price)
-          best[key] = { price, partner: partner.key, benefits: offer.benefits };
+        const cat       = getMealCategory(offer);
+        const price     = offer.price.amount;
+        const cancellable = isCancellable(offer);
+
+        if (!cheapestByCategory[cat] || price < cheapestByCategory[cat].price)
+          cheapestByCategory[cat] = { price, partner: partner.key, benefits: offer.benefits, cancellable };
+
+        if (cancellable && (!cheapestCancellable[cat] || price < cheapestCancellable[cat].price))
+          cheapestCancellable[cat] = { price, partner: partner.key, benefits: offer.benefits };
       });
     });
 
-    return {
-      name:       meta.name,
-      size:       meta.size,
-      beds:       meta.beds,
-      bestOffers: best,
-    };
-  }).filter(r => allOffers ? r.offers.length > 0 : Object.values(r.bestOffers).some(v => v !== null));
+    const offers = [];
+    for (const cat of MEAL_CATEGORIES) {
+      const best = cheapestByCategory[cat];
+      if (!best) continue;
+      offers.push({ benefits: best.benefits, prices: { [best.partner]: best.price } });
+      if (!best.cancellable && cheapestCancellable[cat])
+        offers.push({ benefits: cheapestCancellable[cat].benefits, prices: { [cheapestCancellable[cat].partner]: cheapestCancellable[cat].price } });
+    }
+
+    return { name: meta.name, size: meta.size, beds: meta.beds, offers };
+  }).filter(r => r.offers.length > 0);
 
   // Sort rooms by size ascending; rooms with unknown size go last
   rooms.sort((a, b) => parseSizeM2(a.size) - parseSizeM2(b.size));

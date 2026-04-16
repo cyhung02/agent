@@ -88,9 +88,7 @@ On **Windows**, `$DISPLAY` is not required — Playwright uses native rendering 
 
 ## Step 4 — Get Room Prices
 
-The script fetches prices from all configured partners in parallel and consolidates the results. Two output modes are available:
-
-### Default mode — 4 best-price slots per room
+The script fetches prices from all configured partners in parallel and returns JSON with this structure:
 
 ```bash
 node <agoda.js path> \
@@ -100,21 +98,10 @@ node <agoda.js path> \
   [--adults 2] \
   [--children 0] \
   [--rooms 1] \
-  [--currency TWD]
+  [--currency TWD] \
+  [--all_offers]
 ```
 
-Each room's `bestOffers` contains the cheapest offer across all partners for each of the 4 categories:
-
-| Key | 說明 |
-|---|---|
-| `noMeal_nonCancellable` | 不含餐，不可取消 |
-| `noMeal_cancellable` | 不含餐，可取消 |
-| `withMeal_nonCancellable` | 含餐，不可取消 |
-| `withMeal_cancellable` | 含餐，可取消 |
-
-A slot is `null` when no matching offer exists for that room.
-
-Returns JSON:
 ```json
 {
   "propertyId": "621491",
@@ -132,60 +119,26 @@ Returns JSON:
       "name": "大床標準雙人間- 禁煙 (Standard Double Room with Queen Bed - Non-Smoking)",
       "size": "19平方公尺/205平方英尺",
       "beds": ["1張大床"],
-      "bestOffers": {
-        "noMeal_nonCancellable":   { "price": 7499, "partner": "jcb", "benefits": ["免費Wi-Fi"] },
-        "noMeal_cancellable":      { "price": 6811, "partner": "jcb", "benefits": ["免費Wi-Fi", "2026年5月21日 星期四前可免費取消", "可延至2026年5月19日 星期二扣款"] },
-        "withMeal_nonCancellable": { "price": 8792, "partner": "jcb", "benefits": ["早餐", "免費Wi-Fi"] },
-        "withMeal_cancellable":    { "price": 8328, "partner": "jcb", "benefits": ["早餐", "免費Wi-Fi", "2026年5月21日 星期四前可免費取消", "可延至2026年5月19日 星期二扣款"] }
-      }
-    }
-  ]
-}
-```
-
-### `--all_offers` mode — all offers with per-partner prices
-
-```bash
-node <agoda.js path> \
-  --id 621491 \
-  --checkin 2026-06-01 \
-  --checkout 2026-06-02 \
-  [--adults 2] \
-  [--children 0] \
-  [--rooms 1] \
-  [--currency TWD] \
-  --all_offers
-```
-
-Each room's `offers` lists every distinct benefit combination, with prices for every partner that carries it. Semantically identical benefits phrased differently across partners are merged into the same offer row.
-
-Returns JSON:
-```json
-{
-  "propertyId": "621491",
-  "hotelName": "新宿JR九州飯店 (JR Kyushu Hotel Blossom Shinjuku)",
-  "searchCriteria": "2026-06-01 - 2026-06-02, 2人",
-  "currency": "TWD",
-  "bookingUrls": { ... },
-  "rooms": [
-    {
-      "name": "大床標準雙人間- 禁煙 (Standard Double Room with Queen Bed - Non-Smoking)",
-      "size": "19平方公尺/205平方英尺",
-      "beds": ["1張大床"],
       "offers": [
         {
-          "benefits": ["免費Wi-Fi", "2026年5月21日 星期四前可免費取消。", "2026年5月19日 星期二前無須付款"],
-          "prices": { "regular": 7235, "jcb": 6811, "mctaishinbusiness": 6936, "google": 7413 }
+          "benefits": ["免費Wi-Fi", "2026年5月21日 星期四前可免費取消", "可延至2026年5月19日 星期二扣款"],
+          "prices": { "jcb": 6811 }
         },
         {
-          "benefits": ["免費Wi-Fi"],
-          "prices": { "regular": 7880, "jcb": 7499, "mctaishinbusiness": 7637 }
+          "benefits": ["早餐", "免費Wi-Fi"],
+          "prices": { "jcb": 8792 }
         }
       ]
     }
   ]
 }
 ```
+
+- `bookingUrls` — one booking URL per partner; use the partner key to look up the URL when presenting links to the user
+- `rooms` — sorted by size ascending; rooms with unknown size appear last
+- `size` — room size string (may be `null` if unavailable)
+- `beds` — bed configuration(s) (e.g. `["1張大床"]`, `["2張單人床"]`); empty array if unavailable
+- `offers` — each entry has `benefits` (amenities, cancellation deadline, pay-later info) and `prices` (partner → price)
 
 ### Parameters
 
@@ -198,7 +151,7 @@ Returns JSON:
 | `--children` | `0` | Number of children |
 | `--rooms` | `1` | Number of rooms |
 | `--currency` | `TWD` | Currency code (see table below) |
-| `--all_offers` | off | Show all offers with per-partner prices instead of 4 best-price slots |
+| `--all_offers` | off | Show every distinct offer with prices for all partners that carry it |
 
 ### Supported currencies
 
@@ -241,35 +194,18 @@ google: <bookingUrls.google>
 
 Only include partners present in `bookingUrls`.
 
-### Step 3 — Summary table (default mode)
+### Step 3 — Summary table
 
 Render a one-row-per-room overview. Rooms are already sorted by size ascending in the JSON.
 
-| 房型 | 大小 | 床型 | 不含餐不可取消 | 不含餐可取消 | 含餐不可取消 | 含餐可取消 |
-|---|---|---|---|---|---|---|
-| {name} | {size or —} | {beds joined, or —} | {slot or —} | {slot or —} | {slot or —} | {slot or —} |
-
-**Slot cell rules:**
-- If the slot is `null`, show `—`
-- Otherwise: `partner TWD X,XXX` followed by the key benefit strings (cancellation deadline, pay-later deadline) from `benefits`, each on its own line
-- Use plain partner names — booking links are already listed in Step 2
-
-### Step 3 — Summary table (`--all_offers` mode)
-
-Render a one-row-per-room overview showing the cheapest offer across all partners and all offers.
-
 | 房型 | 大小 | 床型 | 最低價 (partner) |
 |---|---|---|---|
-| {name} | {size or —} | {beds joined, or —} | cheapest price among all offers and partners, with plain partner name |
+| {name} | {size or —} | {beds joined, or —} | cheapest price across all offers and partners, with plain partner name |
 
 ### Step 4 — Detailed breakdown
 
 After the summary, list full offer details for every room. Use plain partner names throughout — booking links are already in Step 2.
 
-**Default mode:**
-For each room, show each non-null slot in `bestOffers` with its price, plain partner name, and `benefits`.
-
-**`--all_offers` mode:**
 1. **List every room in the `rooms` array — do not omit any.**
 2. For each room, **list every offer in its `offers` array** — do not skip.
 3. For each offer, show the `benefits` and the price for **every partner key present in `prices`**. Use plain partner names. If a partner key is absent from `prices`, omit it — do not show a dash or placeholder.
