@@ -69,10 +69,10 @@ const CURRENCY_ID = {
 // url-based: cid fetched from partner landing page
 // cidFetcher-based: cid fetched dynamically (receives hotelName, checkin, checkout)
 const PARTNERS = [
-  { key: 'regular',           url: 'https://www.agoda.com/zh-tw' },
-  { key: 'jcb',               url: 'https://www.agoda.com/zh-tw/jcbtw' },
-  { key: 'mctaishinbusiness', url: 'https://www.agoda.com/zh-tw/mctaishinbusiness' },
-  { key: 'google',            cidFetcher: fetchCidFromGoogleMaps },
+  { key: 'Regular',        url: 'https://www.agoda.com/zh-tw' },
+  { key: 'JCB',            url: 'https://www.agoda.com/zh-tw/jcbtw' },
+  { key: '台新Mastercard', url: 'https://www.agoda.com/zh-tw/mctaishinbusiness' },
+  { key: 'Google Maps',    cidFetcher: fetchCidFromGoogleMaps },
 ];
 
 // — API key: fetch from Agoda JS bundles —
@@ -195,7 +195,7 @@ async function fetchCidFromGoogleMaps(hotelName, checkin, _checkout) {
   for (const r of results) {
     if (r.status === 'fulfilled') return r.value;
   }
-  process.stderr.write(`[agoda] google CID not found, using fallback CID ${GOOGLE_FALLBACK_CID}\n`);
+  process.stderr.write(`[agoda] Google Maps CID not found, using fallback CID ${GOOGLE_FALLBACK_CID}\n`);
   return GOOGLE_FALLBACK_CID;
 }
 

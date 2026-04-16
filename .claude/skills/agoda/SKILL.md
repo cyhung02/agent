@@ -109,10 +109,10 @@ node <agoda.js path> \
   "searchCriteria": "2026-06-01 - 2026-06-02, 2人",
   "currency": "TWD",
   "bookingUrls": {
-    "regular": "https://www.agoda.com/zh-tw/...&cid=-1",
-    "jcb": "https://www.agoda.com/zh-tw/...&cid=1926014",
-    "mctaishinbusiness": "https://www.agoda.com/zh-tw/...&cid=1897427",
-    "google": "https://www.agoda.com/zh-tw/...&cid=1917614"
+    "Regular": "https://www.agoda.com/zh-tw/...&cid=-1",
+    "JCB": "https://www.agoda.com/zh-tw/...&cid=1926014",
+    "台新Mastercard": "https://www.agoda.com/zh-tw/...&cid=1897427",
+    "Google Maps": "https://www.agoda.com/zh-tw/...&cid=1917614"
   },
   "rooms": [
     {
@@ -122,11 +122,11 @@ node <agoda.js path> \
       "offers": [
         {
           "benefits": ["免費Wi-Fi", "2026年5月21日 星期四前可免費取消", "可延至2026年5月19日 星期二扣款"],
-          "prices": { "jcb": 6811 }
+          "prices": { "JCB": 6811 }
         },
         {
           "benefits": ["早餐", "免費Wi-Fi"],
-          "prices": { "jcb": 8792 }
+          "prices": { "JCB": 8792 }
         }
       ]
     }
@@ -179,36 +179,35 @@ node <agoda.js path> \
 ## Presenting Results
 
 ### Step 1 — Header
-Show hotel name and search criteria (dates, guests, rooms).
+Show hotel name, currency, and search criteria (dates, guests, rooms).
 
-### Step 2 — Booking Links (one-time reference)
+### Step 2 — Booking Links
 
-List each partner and its booking URL **once**, as a short reference block. All subsequent sections use plain partner names only — never repeat the URLs.
+Render a table with one row per partner. Only include partners present in `bookingUrls`.
 
-```
-regular: <bookingUrls.regular>
-jcb: <bookingUrls.jcb>
-mctaishinbusiness: <bookingUrls.mctaishinbusiness>
-google: <bookingUrls.google>
-```
+| 通路 | 連結 |
+|---|---|
+| Regular | [Regular](<bookingUrls.Regular>) |
+| JCB | [JCB](<bookingUrls.JCB>) |
+| 台新Mastercard | [台新Mastercard](<bookingUrls.台新Mastercard>) |
+| Google Maps | [Google Maps](<bookingUrls.Google Maps>) |
 
-Only include partners present in `bookingUrls`.
+### Step 3 — Detailed breakdown
 
-### Step 3 — Summary table
-
-Render a one-row-per-room overview. Rooms are already sorted by size ascending in the JSON.
-
-| 房型 | 大小 | 床型 | 最低價 (partner) |
-|---|---|---|---|
-| {name} | {size or —} | {beds joined, or —} | cheapest price across all offers and partners, with plain partner name |
-
-### Step 4 — Detailed breakdown
-
-After the summary, list full offer details for every room. Use plain partner names throughout — booking links are already in Step 2.
+List full offer details for every room. Booking links are already in Step 2 — use plain partner names only throughout.
 
 1. **List every room in the `rooms` array — do not omit any.**
-2. For each room, **list every offer in its `offers` array** — do not skip.
-3. For each offer, show the `benefits` and the price for **every partner key present in `prices`**. Use plain partner names. If a partner key is absent from `prices`, omit it — do not show a dash or placeholder.
+2. For each room, render a heading and a table of all offers.
+3. For each offer, emit one row **per partner key present in `prices`**. If a partner key is absent, omit it — do not show a dash or placeholder.
+4. Format prices with thousands separator (e.g. `6,811`); omit currency symbol (shown in header).
+5. The 方案 column is the offer's `benefits` joined with `、`.
+
+#### {房型名稱}（{大小 or —} / {beds joined, or —}）
+
+| 價格 | 通路 | 方案 |
+|---|---|---|
+| 6,811 | JCB | 免費Wi-Fi、2026年5月21日前可免費取消 |
+| 8,792 | JCB | 早餐、免費Wi-Fi |
 
 ---
 
