@@ -185,12 +185,12 @@ Show hotel name, currency, and search criteria (dates, guests, rooms).
 
 Render a table with one row per partner. Only include partners present in `bookingUrls`.
 
-| 通路 | 連結 |
-|---|---|
-| Regular | [Regular](<bookingUrls.Regular>) |
-| JCB | [JCB](<bookingUrls.JCB>) |
-| 台新Mastercard | [台新Mastercard](<bookingUrls.台新Mastercard>) |
-| Google Maps | [Google Maps](<bookingUrls.Google Maps>) |
+| 通路 |
+|---|
+| [Regular](<bookingUrls.Regular>) |
+| [JCB](<bookingUrls.JCB>) |
+| [台新Mastercard](<bookingUrls.台新Mastercard>) |
+| [Google Maps](<bookingUrls.Google Maps>) |
 
 ### Step 3 — Detailed breakdown
 
