@@ -228,7 +228,20 @@ Returns JSON:
 ### Step 1 — Header
 Show hotel name and search criteria (dates, guests, rooms).
 
-### Step 2 — Summary table (default mode)
+### Step 2 — Booking Links (one-time reference)
+
+List each partner and its booking URL **once**, as a short reference block. All subsequent sections use plain partner names only — never repeat the URLs.
+
+```
+regular: <bookingUrls.regular>
+jcb: <bookingUrls.jcb>
+mctaishinbusiness: <bookingUrls.mctaishinbusiness>
+google: <bookingUrls.google>
+```
+
+Only include partners present in `bookingUrls`.
+
+### Step 3 — Summary table (default mode)
 
 Render a one-row-per-room overview. Rooms are already sorted by size ascending in the JSON.
 
@@ -238,27 +251,28 @@ Render a one-row-per-room overview. Rooms are already sorted by size ascending i
 
 **Slot cell rules:**
 - If the slot is `null`, show `—`
-- Otherwise: `[partner](bookingUrls[partner]) TWD X,XXX` followed by the key benefit strings (cancellation deadline, pay-later deadline) from `benefits`, each on its own line
+- Otherwise: `partner TWD X,XXX` followed by the key benefit strings (cancellation deadline, pay-later deadline) from `benefits`, each on its own line
+- Use plain partner names — booking links are already listed in Step 2
 
-### Step 2 — Summary table (`--all_offers` mode)
+### Step 3 — Summary table (`--all_offers` mode)
 
 Render a one-row-per-room overview showing the cheapest offer across all partners and all offers.
 
-| 房型 | 大小 | 床型 | 最低價 |
+| 房型 | 大小 | 床型 | 最低價 (partner) |
 |---|---|---|---|
-| {name} | {size or —} | {beds joined, or —} | cheapest price among all offers and partners, linked to that partner's booking URL |
+| {name} | {size or —} | {beds joined, or —} | cheapest price among all offers and partners, with plain partner name |
 
-### Step 3 — Detailed breakdown
+### Step 4 — Detailed breakdown
 
-After the summary, list full offer details for every room.
+After the summary, list full offer details for every room. Use plain partner names throughout — booking links are already in Step 2.
 
 **Default mode:**
-For each room, show each non-null slot in `bestOffers` with its price, partner (linked to `bookingUrls[partner]`), and `benefits`.
+For each room, show each non-null slot in `bestOffers` with its price, plain partner name, and `benefits`.
 
 **`--all_offers` mode:**
 1. **List every room in the `rooms` array — do not omit any.**
 2. For each room, **list every offer in its `offers` array** — do not skip.
-3. For each offer, show the `benefits` and the price for **every partner key present in `prices`**. Use plain partner names (no links) — the booking links are already in the summary table. If a partner key is absent from `prices`, omit it — do not show a dash or placeholder.
+3. For each offer, show the `benefits` and the price for **every partner key present in `prices`**. Use plain partner names. If a partner key is absent from `prices`, omit it — do not show a dash or placeholder.
 
 ---
 
