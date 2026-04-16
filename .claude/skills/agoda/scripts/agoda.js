@@ -56,6 +56,15 @@ const rooms    = parseInt(getArg('--rooms')    || '1', 10);
 const currency   = (getArg('--currency') || 'TWD').toUpperCase();
 const allOffers  = args.includes('--all_offers');
 
+// — Currency ID map: agoda.version.03 cookie uses numeric IDs, not currency codes —
+// Discovered by scanning CuCur values 1-35 against the property page.
+// The URL param currencyCode= is ignored by the page; only CuCur in the cookie counts.
+const CURRENCY_ID = {
+  EUR: 1,  GBP: 2,  HKD: 3,  MYR: 4,  SGD: 5,
+  THB: 6,  USD: 7,  NZD: 8,  AUD: 9,  JPY: 11,
+  CAD: 13, KRW: 26, INR: 27, TWD: 28,
+};
+
 // — Partners: add entries here to include more partner price comparisons —
 // url-based: cid fetched from partner landing page
 // cidFetcher-based: cid fetched dynamically (receives hotelName, checkin, checkout)
@@ -269,7 +278,7 @@ function buildRoomGridBody({ propertyId, checkin, checkout, rooms, adults, child
     userContext: {
       priceStrategy: 101,
       firstDownloadVersion: '6_0',
-      currencyId: 28,
+      currencyId: CURRENCY_ID[currency] ?? 28,
       currencyDisplayType: 3,
       cmsMode: 0,
       mseHotelIds: [],
@@ -472,6 +481,13 @@ function extractRoomData() {
 async function fetchPricesInContext(browser, pageUrl) {
   const context = await browser.newContext({ ignoreHTTPSErrors: true });
   try {
+    // Currency is controlled by cookie, not the currencyCode= URL param (which Agoda ignores).
+    await context.addCookies([{
+      name:   'agoda.version.03',
+      value:  `CookieId=${crypto.randomUUID()}&DLang=zh-tw&CurLabel=${currency}&CuCur=${CURRENCY_ID[currency] ?? 28}`,
+      domain: '.agoda.com',
+      path:   '/',
+    }]);
     const page = await context.newPage();
     await page.goto(pageUrl, { waitUntil: 'domcontentloaded' });
     await page.waitForFunction(
