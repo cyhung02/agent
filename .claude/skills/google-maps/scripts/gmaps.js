@@ -15,21 +15,33 @@ const MATRIX_FIELDMASK = 'originIndex,destinationIndex,duration,distanceMeters,s
 
 // --- HTTP helpers (curl for proxy compatibility) ---
 
+function sleep(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+function curlRaw(args) {
+  while (true) {
+    const result = execFileSync('curl', args, { encoding: 'utf8' });
+    if (result.includes('DNS cache overflow')) { sleep(5000); continue; }
+    return result;
+  }
+}
+
 function curlGet(url, fieldMask) {
   const flags = ['-s', '--fail'];
   if (fieldMask) flags.push('-H', `X-Goog-FieldMask: ${fieldMask}`);
-  return execFileSync('curl', [...flags, url], { encoding: 'utf8' });
+  return curlRaw([...flags, url]);
 }
 
 function curlPost(url, fieldMask, body) {
-  return execFileSync('curl', [
+  return curlRaw([
     '-s', '--fail',
     '-X', 'POST',
     '-H', `X-Goog-FieldMask: ${fieldMask}`,
     '-H', 'Content-Type: application/json',
     '-d', JSON.stringify(body),
     url,
-  ], { encoding: 'utf8' });
+  ]);
 }
 
 // --- Argument parser ---
