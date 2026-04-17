@@ -1,4 +1,4 @@
-# Place Types — Table A
+# Place Types
 
 Valid values for `includedTypes`, `excludedTypes`, `includedPrimaryTypes`, `excludedPrimaryTypes` in Nearby Search (New) and Text Search (New).
 
