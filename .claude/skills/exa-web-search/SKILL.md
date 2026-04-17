@@ -24,7 +24,7 @@ If results are irrelevant, rephrase and repeat.
 
 ## Stage 2a — Depth: prose content
 
-Summarizes pages to extract answers. Use for standard web articles and documentation.
+Generates a query-tailored summary from each page's text (via Gemini Flash). Use for standard web articles and documentation.
 
 ```bash
 bash /path/to/exa.sh contents "question" "url1" "url2" ...
