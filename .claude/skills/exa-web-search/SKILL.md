@@ -51,7 +51,7 @@ Skip Stage 2a and go straight here if the target page is a SPA, table, or dynami
 | Default | Stage 1 → Stage 2a |
 | Target is SPA / table / dynamic | Stage 1 → Stage 2b (playwright-cli) |
 | URL already known | Skip Stage 1, go directly to Stage 2a or 2b |
-| Stage 2 has no answer | Rephrase keywords → retry Stage 2, or switch to playwright-cli |
+| Stage 2a has no answer | Rephrase keywords → retry Stage 2a, or switch to playwright-cli |
 
 ## Output
 
