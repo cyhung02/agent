@@ -115,7 +115,8 @@ node <gmaps.js> nearby --lat <lat> --lng <lng> --radius <m> --types <type1,type2
 
 - `--radius`: hard limit in metres
 - `--types`: comma-separated, OR logic, max 50 (e.g. `--types convenience_store,atm`)
-- For the full list of valid types, see [references/place-types.md](references/place-types.md)
+- Common types: `restaurant` `cafe` `bar` `convenience_store` `supermarket` `pharmacy` `hospital` `atm` `bank` `gas_station` `electric_vehicle_charging_station` `parking` `subway_station` `bus_stop` `train_station` `hotel` `tourist_attraction` `museum` `park` `gym` `spa`
+- Full list: [references/place-types.md](references/place-types.md)
 
 Output: same as `search`
 
