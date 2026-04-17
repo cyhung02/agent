@@ -163,5 +163,4 @@ Always pass `place_id` to `places_map_display_v0` — it fetches Enterprise-tier
 ## Important Notes
 
 - `matrix`: check `condition === "ROUTE_EXISTS"` before reading distance/duration — script returns all elements including unreachable pairs
-- `search` / `nearby` / `place`: Places API returns HTTP 200 even on errors — check for an `error` field in unexpected responses
 - Photo URLs expire — always fetch from a fresh `photos` call, do not cache

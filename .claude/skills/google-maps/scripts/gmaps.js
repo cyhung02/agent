@@ -207,6 +207,7 @@ switch (command) {
       };
     }
     const raw = JSON.parse(curlPost(`${BASE}/v1/places:searchText`, PLACES_FIELDMASK, body));
+    if (raw.error) die(`Places API error: ${JSON.stringify(raw.error)}`);
     console.log(JSON.stringify(normalizePlaces(raw)));
     break;
   }
@@ -228,6 +229,7 @@ switch (command) {
       },
     };
     const raw = JSON.parse(curlPost(`${BASE}/v1/places:searchNearby`, PLACES_FIELDMASK, body));
+    if (raw.error) die(`Places API error: ${JSON.stringify(raw.error)}`);
     console.log(JSON.stringify(normalizePlaces(raw)));
     break;
   }
@@ -235,6 +237,7 @@ switch (command) {
   case 'place': {
     const id = positional[0] ?? die('place_id required');
     const raw = JSON.parse(curlGet(`${BASE}/v1/places/${id}`, PLACE_DETAIL_FIELDMASK));
+    if (raw.error) die(`Places API error: ${JSON.stringify(raw.error)}`);
     console.log(JSON.stringify({
       id:                raw.id,
       name:              raw.displayName?.text ?? '',
