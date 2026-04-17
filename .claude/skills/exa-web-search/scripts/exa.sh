@@ -42,15 +42,11 @@ sys.stdout.buffer.write(data)
 case "$MODE" in
   search)
     QUERY="$1"; shift
-    NUM_RESULTS=15
-    MAX_CHARS=300
     FRESH=false
 
     while [ $# -gt 0 ]; do
       case "$1" in
-        --results) NUM_RESULTS="$2"; shift 2 ;;
-        --chars)   MAX_CHARS="$2";   shift 2 ;;
-        --fresh)   FRESH=true;       shift   ;;
+        --fresh) FRESH=true; shift ;;
         *) shift ;;
       esac
     done
@@ -63,13 +59,13 @@ case "$MODE" in
     PAYLOAD=$(printf '{
       "query": %s,
       "type": "auto",
-      "numResults": %d,
+      "numResults": 15,
       "contents": {
-        "highlights": {"maxCharacters": %d}
+        "highlights": {"maxCharacters": 300}
         %s
       }
     }' "$(echo "$QUERY" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read().strip()))')" \
-       "$NUM_RESULTS" "$MAX_CHARS" "$FRESH_BLOCK")
+       "$FRESH_BLOCK")
 
     call_api "https://api.exa.ai/search" "$PAYLOAD"
     ;;

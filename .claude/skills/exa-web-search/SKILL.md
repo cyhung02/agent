@@ -10,38 +10,48 @@ description: >
 
 ## Strategy
 
-Always start with Stage 1. It casts a wide net — 15 results with short
-highlights — so the agent builds a broad picture of what's available on
-the web. From that picture, the agent decides which pages are most likely
-to contain the actual answer, then fetches those in Stage 2.
+**Stage 1 → Stage 2a or 2b → done.**
 
-If Stage 1 results are irrelevant, rephrase the query and repeat.
-If Stage 2 still cannot answer the question, either rephrase the summary
-query and retry Stage 2, or go back to Stage 1 with a different query.
-Repeat until the question is answered.
+If Stage 1 results are irrelevant, rephrase and repeat.
+If Stage 2 cannot answer, rephrase the query and retry Stage 2, or switch to playwright-cli.
 
 ## Script
 
 Use the find-skill-script skill to locate `scripts/exa.sh` before running.
 
-**Stage 1 — Breadth**
+**Stage 1 — Breadth (always start here)**
+
+Casts a wide net to locate relevant pages. Fixed at 15 results / 300-char highlights.
 
 ```bash
-bash /path/to/exa.sh search "query" [--results N] [--chars N] [--fresh]
+bash /path/to/exa.sh search "query" [--fresh]
 ```
 
-- `--results`: number of results (default 15)
-- `--chars`: highlight max characters (default 300)
 - `--fresh`: force livecrawl for recency-critical queries
 
-**Stage 2 — Depth**
+**Stage 2a — Depth (prose content)**
 
-Each call takes a question and one or more URLs. Multiple calls with
-different questions and URLs are supported.
+Summarizes one or more pages to extract answers.
 
 ```bash
 bash /path/to/exa.sh contents "question" "url1" "url2" ...
 ```
+
+**Stage 2b — Depth (structured / JS-rendered pages)**
+
+Use `playwright-cli eval` to extract DOM directly — more token-efficient than text mode.
+Skip Stage 2a and go straight here if the target page is a SPA, table, or dynamically rendered.
+
+---
+
+## Decision rules
+
+| Situation | Action |
+|---|---|
+| Default | Stage 1 → Stage 2a |
+| Target is SPA / table / dynamic | Stage 1 → Stage 2b (playwright-cli) |
+| URL already known | Skip Stage 1, go directly to Stage 2a or 2b |
+| Stage 2 has no answer | Rephrase keywords → retry Stage 2, or switch to playwright-cli |
 
 ## Output
 
