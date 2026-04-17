@@ -1,28 +1,15 @@
 ---
 name: google-maps
-description: Google Maps Platform skill for routing, geocoding, place search, place details, and photos. Use when the user asks about walking distance, travel time, directions between two places, how long to walk/drive, address to coordinates, place details, searching for restaurants or facilities nearby, finding places by text, or showing place photos. Make sure to use this skill whenever the user asks anything related to maps, routes, places, or location-based queries even if they don’t explicitly mention “Google Maps”. Triggers 步行距離、步行時間、走路幾分鐘、開車幾分鐘、從A到B怎麼走、地址座標、附近多遠、路線規劃、附近餐廳、附近便利商店、周邊設施、地點搜尋、地點照片、walking distance, travel time, directions, route, nearby, search places, place photo.
+description: Google Maps Platform skill for routing, geocoding, place search, place details, and photos. Use when the user asks about walking distance, travel time, directions between two places, how long to walk/drive, address to coordinates, place details, searching for restaurants or facilities nearby, finding places by text, or showing place photos. Make sure to use this skill whenever the user asks anything related to maps, routes, places, or location-based queries even if they don't explicitly mention "Google Maps". Triggers 步行距離、步行時間、走路幾分鐘、開車幾分鐘、從A到B怎麼走、地址座標、附近多遠、路線規劃、附近餐廳、附近便利商店、周邊設施、地點搜尋、地點照片、walking distance, travel time, directions, route, nearby, search places, place photo.
 ---
 
 # Google Maps Skill
 
-Direct curl calls to Google Maps Platform APIs.
+All API calls go through `gmaps.js`, which proxies to `routes.cyhung02.workers.dev`.
 
-## Cloudflare Worker Proxy
+## Step 0 — Locate the Script
 
-All API calls go through the proxy (holds the API key server-side):
-
-```
-https://routes.cyhung02.workers.dev
-```
-
-| Path prefix | Upstream |
-|---|---|
-| `POST /computeRoutes` | Routes API computeRoutes |
-| `POST /computeRouteMatrix` | Routes API computeRouteMatrix |
-| `GET /maps/*` | Maps (Geocoding) API |
-| `GET /POST /v1/*` | Places API |
-
-Do **not** pass any API key in requests to the proxy — it injects the key automatically.
+Use the **find-skill-script** skill to resolve the absolute path of `gmaps.js` under the `scripts/` subdirectory. Use the returned path in all subsequent `node <gmaps.js path>` commands.
 
 ## Getting the User's Current Location
 
@@ -38,219 +25,141 @@ Use the returned `latitude` and `longitude` as the origin or search center for s
 
 ## Decision Guide
 
-Pick the right API before making any call:
-
-|Scenario           |Use                                    |
-|-------------------|---------------------------------------|
-|「從A走到B要多久」         |Routes API (computeRoutes)             |
-|「這個地址的座標是什麼」       |Geocoding API                          |
-|「新宿駅、東京鐵塔的座標」（一般地名）|Text Search          |
-|「新宿附近好吃的拉麵」        |Text Search                            |
-|「飯店300m內的便利商店」     |Nearby Search                          |
-|「這幾個景點怎麼排最省時間」     |Routes API (computeRouteMatrix)        |
-|「這個地點的電話/營業時間」     |Place Details                          |
-|「這個地點的照片」          |Place Photos                           |
+| Scenario | Command |
+|---|---|
+| 「從A走到B要多久」 | `route` |
+| 「這個地址的座標是什麼」 | `geocode` |
+| 「新宿駅、東京鐵塔的座標」（一般地名）| `search` |
+| 「新宿附近好吃的拉麵」 | `search` |
+| 「飯店300m內的便利商店」 | `nearby` |
+| 「這幾個景點怎麼排最省時間」 | `matrix` |
+| 「這個地點的電話/營業時間」 | `place` |
+| 「這個地點的照片」 | `photos` |
 
 -----
 
-## 1. Routes API — computeRoutes (Route + travel time)
+## 1. `route` — Route + travel time
 
 ```bash
-curl -s -X POST "https://routes.cyhung02.workers.dev/computeRoutes" \
-  -H "X-Goog-FieldMask: routes.duration,routes.distanceMeters,routes.legs.duration,routes.legs.distanceMeters" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "origin": {"location": {"latLng": {"latitude": <lat>, "longitude": <lng>}}},
-    "destination": {"location": {"latLng": {"latitude": <lat>, "longitude": <lng>}}},
-    "travelMode": "<MODE>",
-    "computeAlternativeRoutes": false,
-    "languageCode": "zh-TW"
-  }'
+node <gmaps.js> route \
+  --from-lat <lat> --from-lng <lng> \
+  --to-lat <lat>   --to-lng <lng> \
+  --mode WALK|DRIVE|TRANSIT|BICYCLE
 ```
 
-- `travelMode`: `WALK` | `DRIVE` | `TRANSIT` | `BICYCLE` | `TWO_WHEELER`
-- **TRANSIT may return empty results in Japan** — if `routes[]` is missing or empty, fall back to the Yahoo Transit skill
-- **When `travelMode=TRANSIT`, set `"computeAlternativeRoutes": true`** to get multiple route options (Google's "best" route is not always fastest — other options may be better). Iterate over all `routes[]` and present each one to the user.
-- For transit with step details, add to FieldMask: `,routes.legs.steps.transitDetails,routes.legs.steps.navigationInstruction`
-- Key fields: `routes[n].distanceMeters` (int meters), `routes[n].duration` (string e.g. `"165s"` — parse seconds with `parseInt("165s")`)
-- Leg-level: `routes[n].legs[n].distanceMeters`, `routes[n].legs[n].duration`
+- **TRANSIT may return empty results in Japan** — if result is `null` or `[]`, fall back to Yahoo Transit skill
+- **TRANSIT** automatically sets `computeAlternativeRoutes: true` and returns an array of routes; present all options to the user
+- `--alternatives` flag forces multiple routes for non-TRANSIT modes
+
+Output (non-TRANSIT): `{ durationSeconds, distanceMeters, legs[] }`
+Output (TRANSIT): array of routes, each with `legs[].steps[].transitDetails`
 
 -----
 
-## 2. Geocoding API — Address ↔ lat/lng
-
-Use for precise street addresses or reverse geocoding. For general place names (新宿駅, 東京鐵塔), prefer Text Search to save quota.
-
-**Forward (address → lat/lng):**
+## 2. `matrix` — Multi-point distance table
 
 ```bash
-curl -s --get "https://routes.cyhung02.workers.dev/maps/api/geocode/json" \
-  --data-urlencode "address=<address>" \
-  --data-urlencode "language=zh-TW"
+node <gmaps.js> matrix \
+  --origins "lat1,lng1" --origins "lat2,lng2" \
+  --destinations "lat1,lng1" --destinations "lat2,lng2" \
+  --mode DRIVE|WALK
 ```
 
-**Reverse (lat/lng → address):**
-
-```bash
-curl -s "https://routes.cyhung02.workers.dev/maps/api/geocode/json?latlng=<lat>,<lng>&language=zh-TW"
-```
-
-- Key fields: `results[0].formatted_address`, `results[0].geometry.location.lat/lng`, `results[0].place_id`
+Output: flat array `[{ originIndex, destinationIndex, durationSeconds, distanceMeters, condition }]`
+- Check `condition === "ROUTE_EXISTS"` before reading distance/duration
+- Billed per element (origins × destinations)
 
 -----
 
-## 3. Places Text Search — Open-ended search by text
-
-Use for open exploration, restaurant recommendations (“新宿附近拉麵推薦”).
-`locationBias` = soft preference, results may extend beyond the specified area.
+## 3. `geocode` — Address → lat/lng
 
 ```bash
-curl -s -X POST "https://routes.cyhung02.workers.dev/v1/places:searchText" \
-  -H "X-Goog-FieldMask: places.id,places.displayName,places.formattedAddress,places.location" \
-  -H "Content-Type: application/json" \
-  -d '{"textQuery": "<query>", "maxResultCount": 5, "locationBias": {"circle": {"center": {"latitude": <lat>, "longitude": <lng>}, "radius": <meters>}}}'
+node <gmaps.js> geocode "東京都新宿区西新宿2-8-1"
 ```
 
-- `locationBias` is optional — omit if you don’t have a center point
-- Optional request filters:
-  - `"minRating": 4.0` — minimum rating threshold (0.0–5.0, steps of 0.5)
-  - `"priceLevels": ["PRICE_LEVEL_INEXPENSIVE", "PRICE_LEVEL_MODERATE"]` — filter by price level
-  - `"includePureServiceAreaBusinesses": true` — include delivery-only businesses (no physical address)
+Output: `{ address, location: { lat, lng }, placeId }`
+
+Use for precise street addresses. For general place names (新宿駅, 東京鐵塔), prefer `search`.
 
 -----
 
-## 4. Places Nearby Search — Strict radius search by type
-
-Use when the user wants a specific facility type within an exact radius (“飯店300m內的便利商店”).
-`locationRestriction` = hard limit, results never exceed the specified radius.
+## 4. `reverse` — lat/lng → address
 
 ```bash
-curl -s -X POST "https://routes.cyhung02.workers.dev/v1/places:searchNearby" \
-  -H "X-Goog-FieldMask: places.id,places.displayName,places.formattedAddress,places.location" \
-  -H "Content-Type: application/json" \
-  -d '{"includedTypes": ["<type>"], "maxResultCount": 5, "locationRestriction": {"circle": {"center": {"latitude": <lat>, "longitude": <lng>}, "radius": <meters>}}}'
+node <gmaps.js> reverse 35.6896 139.7006
 ```
 
-- Common `includedTypes`: `convenience_store`, `restaurant`, `atm`, `pharmacy`, `subway_station`, `bus_stop`, `electric_vehicle_charging_station`
-- Use `excludedTypes` to exclude specific types (up to 50 each)
-- Use `includedPrimaryTypes` / `excludedPrimaryTypes` to filter by a place’s primary type only
+Output: `{ address, location: { lat, lng }, placeId }`
 
 -----
 
-## 5. Routes API — computeRouteMatrix (Multi-point distance table)
-
-Use when the user needs distances/times between multiple points at once (“這幾個景點怎麼排最省時間？”).
+## 5. `search` — Places Text Search
 
 ```bash
-curl -s -X POST “https://routes.cyhung02.workers.dev/computeRouteMatrix” \
-  -H “X-Goog-FieldMask: originIndex,destinationIndex,duration,distanceMeters,status,condition” \
-  -H “Content-Type: application/json” \
-  -d '{
-    “origins”: [
-      {“waypoint”: {“location”: {“latLng”: {“latitude”: <lat1>, “longitude”: <lng1>}}}},
-      {“waypoint”: {“location”: {“latLng”: {“latitude”: <lat2>, “longitude”: <lng2>}}}}
-    ],
-    “destinations”: [
-      {“waypoint”: {“location”: {“latLng”: {“latitude”: <lat1>, “longitude”: <lng1>}}}},
-      {“waypoint”: {“location”: {“latLng”: {“latitude”: <lat2>, “longitude”: <lng2>}}}}
-    ],
-    “travelMode”: “DRIVE”,
-    “languageCode”: “zh-TW”
-  }'
+node <gmaps.js> search "新宿附近拉麵" [--lat <lat> --lng <lng> --radius <m>] [--n 5]
 ```
 
-- Returns **flat array** (not nested rows/elements): `[n].originIndex`, `[n].destinationIndex`
-- Key fields: `[n].distanceMeters` (int), `[n].duration` (string e.g. `”300s”` — parse with `parseInt`)
-- Check `[n].condition === “ROUTE_EXISTS”` before reading distance/duration
-- Limit: origins × destinations ≤ 625; total address/placeId waypoints combined ≤ 50
-- Billed per element (origins × destinations), not per request
+- `--lat/--lng/--radius`: optional location bias (soft preference)
+- `--n`: number of results (default 5)
+
+Output: `[{ id, name, address, location, types, primaryType, mapsUri }]`
 
 -----
 
-## 6. Place Details — Details by place_id
+## 6. `nearby` — Places Nearby Search
 
 ```bash
-curl -s "https://routes.cyhung02.workers.dev/v1/places/<place_id>" \
-  -H "X-Goog-FieldMask: id,displayName,formattedAddress,location"
+node <gmaps.js> nearby --lat <lat> --lng <lng> --radius <m> --type <type> [--n 5]
 ```
 
-Additional FieldMask options (Pro SKU, free 5,000/month):
+- `--radius`: hard limit in metres
+- Common `--type` values: `convenience_store`, `restaurant`, `atm`, `pharmacy`, `subway_station`, `bus_stop`
 
-- `accessibilityOptions` — wheelchair ramp, accessible parking, etc.
-- `googleMapsLinks` — direct Google Maps link for this place
+Output: same as `search`
 
 -----
 
-## 7. Place Photos — Fetch and display place photos
-
-**Step 1 — Get photo names** (skip if you already fetched Place Details with `photos` in FieldMask):
+## 7. `place` — Place Details
 
 ```bash
-curl -s "https://routes.cyhung02.workers.dev/v1/places/<place_id>" \
-  -H "X-Goog-FieldMask: displayName,photos"
-# Returns photos[].name → path like "places/<id>/photos/<ref>"
+node <gmaps.js> place <place_id>
 ```
 
-**Step 2 — Fetch photo URL:**
+Output: `{ id, name, address, location, types, primaryType, mapsUri, addressComponents }`
+
+-----
+
+## 8. `photos` — Place Photos
 
 ```bash
-curl -s "https://routes.cyhung02.workers.dev/v1/<photo_name>/media?maxHeightPx=800&skipHttpRedirect=true"
-# Returns { "photoUri": "https://lh3.googleusercontent.com/..." }
+node <gmaps.js> photos <place_id> [--max-height 800] [--n 3]
 ```
 
-**Step 3 — Download and display:**
+Output: array of photo URLs `["https://lh3.googleusercontent.com/..."]`
 
+Download and display:
 ```bash
 curl -sL "<photoUri>" -o /mnt/user-data/outputs/place_photo.jpg
-# Then use present_files tool to display the image
+# Then use present_files tool to display
 ```
-
-- `skipHttpRedirect=true` → returns JSON with `photoUri` instead of redirecting to the image
-- Size control: `maxHeightPx` / `maxWidthPx` (up to 4800px)
-- Photo names may expire — always fetch from a fresh search/details response, do not cache
 
 -----
 
 ## Displaying results on a map
 
-When calling `places_map_display_v0`, always prepend the search center as the first
-marker in the `locations` array, regardless of whether it is the user’s current location
-or a named place:
+When calling `places_map_display_v0`, always prepend the search center as the first marker:
 
 ```json
-{"latitude": <lat>, "longitude": <lng>, "name": "📍 <location name>", "notes": "Search center"}
+{ "latitude": <lat>, "longitude": <lng>, "name": "📍 <location name>", "notes": "Search center" }
 ```
 
-This makes the reference point explicit on the map for any search.
-
-Always pass `place_id` to `places_map_display_v0` — it automatically fetches Enterprise-tier
-data (rating, opening hours, phone number, photos) at no cost to your API key.
-
------
-
-## Cost Optimization
-
-SKU tiers and free monthly quota per SKU (as of March 2025):
-
-|SKU                    |Free/month|Fields                                                                                                                  |
-|-----------------------|----------|------------------------------------------------------------------------------------------------------------------------|
-|Essentials             |10,000    |`id`, `formattedAddress`, `location`, `types`                                                                           |
-|Pro                    |5,000     |`displayName`, `googleMapsLinks`, `accessibilityOptions`                                                                |
-|Enterprise             |1,000     |`rating`, `userRatingCount`, `regularOpeningHours`, `internationalPhoneNumber`, `priceLevel`, `websiteUri`              |
-|Enterprise + Atmosphere|1,000     |`reviews`, `parkingOptions`, `paymentOptions`, `evChargeOptions`, `fuelOptions`, `generativeSummary`, `editorialSummary`|
-
-**Rules:**
-
-- Keep all FieldMask requests to **Pro SKU or below** (`id`, `displayName`, `formattedAddress`, `location`, `types`).
-- Never include Enterprise or Enterprise + Atmosphere fields in your own API calls.
-- Always pass `place_id` to `places_map_display_v0` to get Enterprise data for free.
-- Billing is determined by the **highest SKU field** in the FieldMask — one expensive field upgrades the entire request.
+Always pass `place_id` to `places_map_display_v0` — it fetches Enterprise-tier data (rating, opening hours, phone, photos) at no cost.
 
 -----
 
 ## Important Notes
 
-- Check `status === "OK"` for Geocoding responses
-- Routes API (computeRoutes / computeRouteMatrix): no top-level `status` — check HTTP status code; for matrix elements check `[n].condition === "ROUTE_EXISTS"`
-- Places API (v1) returns HTTP 200 even on errors — always check for an `error` field
-- Place Photos: download to `/mnt/user-data/outputs/` then use `present_files` to display
+- `geocode` / `reverse`: check `status === "OK"` is handled by the script (exits with error if not OK)
+- `route` / `matrix`: HTTP errors cause script to exit; for matrix elements check `condition === "ROUTE_EXISTS"`
+- `search` / `nearby` / `place`: check for an `error` field in unexpected responses
+- Photo URLs expire — always fetch from a fresh `photos` call, do not cache
