@@ -8,20 +8,11 @@ description: >
 
 # Exa Web Search
 
-## Strategy
-
-**Stage 1 → Stage 2a or 2b → done.**
-
-If Stage 1 results are irrelevant, rephrase and repeat.
-If Stage 2a cannot answer, rephrase the query and retry Stage 2a, or switch to playwright-cli.
-
-## Script
-
 Use the find-skill-script skill to locate `scripts/exa.sh` before running.
 
-**Stage 1 — Breadth (always start here)**
+## Stage 1 — Breadth (always start here)
 
-Returns titles, highlights, and URLs. Use to survey what web information is available on the topic.
+Returns titles, highlights, and URLs — surveys what web information is available on the topic.
 
 ```bash
 bash /path/to/exa.sh search "query" [--fresh]
@@ -29,29 +20,28 @@ bash /path/to/exa.sh search "query" [--fresh]
 
 - `--fresh`: force livecrawl for recency-critical queries
 
-**Stage 2a — Depth (prose content)**
+If results are irrelevant, rephrase and repeat.
 
-Summarizes one or more pages to extract answers.
+## Stage 2a — Depth: prose content
+
+Summarizes pages to extract answers. Use for standard web articles and documentation.
 
 ```bash
 bash /path/to/exa.sh contents "question" "url1" "url2" ...
 ```
 
-**Stage 2b — Depth (structured / JS-rendered pages)**
+If Stage 2a cannot answer, rephrase and retry, or move to Stage 2b.
+
+## Stage 2b — Depth: structured / JS-rendered pages
 
 Use the playwright-cli skill to extract DOM directly.
-Skip Stage 2a and go straight here if the target page is a SPA, table, or dynamically rendered.
+Use when the target page is a SPA, table, or dynamically rendered.
 
 ---
 
-## Decision rules
-
-| Situation | Action |
-|---|---|
-| Default | Stage 1 → Stage 2a |
-| Target is SPA / table / dynamic | Stage 1 → Stage 2b (playwright-cli) |
-| URL already known | Skip Stage 1, go directly to Stage 2a or 2b |
-| Stage 2a has no answer | Rephrase keywords → retry Stage 2a, or switch to playwright-cli |
+**Shortcuts:**
+- URL already known → skip Stage 1, go directly to Stage 2a or 2b
+- Stage 1 highlights suggest SPA/table → go directly to Stage 2b
 
 ## Output
 
