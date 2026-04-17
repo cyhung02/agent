@@ -197,6 +197,7 @@ switch (command) {
     const query = positional[0] ?? die('query required');
     const n = parseInt(args.n ?? '5');
     const body = { textQuery: query, maxResultCount: n, languageCode: 'zh-TW' };
+    if (args['min-rating']) body.minRating = parseFloat(args['min-rating']);
     if (args.lat && args.lng) {
       body.locationBias = {
         circle: {
@@ -214,10 +215,10 @@ switch (command) {
     const lat    = args.lat    ?? die('--lat required');
     const lng    = args.lng    ?? die('--lng required');
     const radius = args.radius ?? die('--radius required');
-    const type   = args.type   ?? die('--type required');
+    const types  = (args.types ?? die('--types required')).split(',').map(t => t.trim());
     const n = parseInt(args.n ?? '5');
     const body = {
-      includedTypes: [type],
+      includedTypes: types,
       maxResultCount: n,
       locationRestriction: {
         circle: {

@@ -31,7 +31,7 @@ Use the returned `latitude` and `longitude` as the origin or search center for s
 | 「這個地址的座標是什麼」 | `geocode` |
 | 「新宿駅、東京鐵塔的座標」（一般地名）| `search` |
 | 「新宿附近好吃的拉麵」 | `search` |
-| 「飯店300m內的便利商店」 | `nearby` |
+| 「飯店300m內的便利商店或ATM」 | `nearby` |
 | 「這幾個景點怎麼排最省時間」 | `matrix` |
 | 「這個地點的電話/營業時間」 | `place` |
 | 「這個地點的照片」 | `photos` |
@@ -47,7 +47,7 @@ node <gmaps.js> route \
   --mode WALK|DRIVE|TRANSIT|BICYCLE
 ```
 
-- **TRANSIT may return empty results in Japan** — if result is `null` or `[]`, fall back to Yahoo Transit skill
+- **TRANSIT may return empty results in Japan** — if result is `null` or `[]`, fall back to the **yahoo-transit** skill
 - **TRANSIT** automatically sets `computeAlternativeRoutes: true` and returns an array of routes; present all options to the user
 - `--alternatives` flag forces multiple routes for non-TRANSIT modes
 
@@ -96,10 +96,11 @@ Output: `{ address, location: { lat, lng }, placeId }`
 ## 5. `search` — Places Text Search
 
 ```bash
-node <gmaps.js> search "新宿附近拉麵" [--lat <lat> --lng <lng> --radius <m>] [--n 5]
+node <gmaps.js> search "新宿附近拉麵" [--lat <lat> --lng <lng> --radius <m>] [--min-rating 4.0] [--n 5]
 ```
 
 - `--lat/--lng/--radius`: optional location bias (soft preference)
+- `--min-rating`: minimum rating threshold (0.0–5.0, steps of 0.5)
 - `--n`: number of results (default 5)
 
 Output: `[{ id, name, address, location, types, primaryType, mapsUri }]`
@@ -109,11 +110,12 @@ Output: `[{ id, name, address, location, types, primaryType, mapsUri }]`
 ## 6. `nearby` — Places Nearby Search
 
 ```bash
-node <gmaps.js> nearby --lat <lat> --lng <lng> --radius <m> --type <type> [--n 5]
+node <gmaps.js> nearby --lat <lat> --lng <lng> --radius <m> --types <type1,type2,...> [--n 5]
 ```
 
 - `--radius`: hard limit in metres
-- Common `--type` values: `convenience_store`, `restaurant`, `atm`, `pharmacy`, `subway_station`, `bus_stop`
+- `--types`: comma-separated, OR logic, max 50 (e.g. `--types convenience_store,atm`)
+- For the full list of valid types (Table A), see [references/place-types.md](references/place-types.md)
 
 Output: same as `search`
 
