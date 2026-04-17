@@ -51,7 +51,7 @@ node <gmaps.js> route \
 - **TRANSIT** automatically sets `computeAlternativeRoutes: true` and returns an array of routes; present all options to the user
 - `--alternatives` flag forces multiple routes for non-TRANSIT modes
 
-Output (non-TRANSIT): `{ durationSeconds, distanceMeters, legs[] }`
+Output (non-TRANSIT): `{ duration, distanceMeters, legs[] }`
 Output (TRANSIT): array of routes, each with `legs[].steps[].transitDetails`
 
 -----

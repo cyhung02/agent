@@ -68,10 +68,6 @@ function normalizePlaces(data) {
   }));
 }
 
-function parseDuration(s) {
-  return s ? parseInt(s) : null;
-}
-
 // --- Main ---
 
 const [,, command, ...rest] = process.argv;
@@ -100,10 +96,10 @@ switch (command) {
     const fieldMask = isTransit ? ROUTE_TRANSIT_FIELDMASK : ROUTE_FIELDMASK;
     const raw = JSON.parse(curlPost(`${BASE}/computeRoutes`, fieldMask, body));
     const routes = (raw.routes ?? []).map(r => ({
-      durationSeconds: parseDuration(r.duration),
+      duration: r.duration,
       distanceMeters: r.distanceMeters,
       legs: (r.legs ?? []).map(l => ({
-        durationSeconds: parseDuration(l.duration),
+        duration: l.duration,
         distanceMeters: l.distanceMeters,
         steps: (l.steps ?? []).map(s => ({
           transitDetails: s.transitDetails ?? null,
@@ -137,7 +133,7 @@ switch (command) {
     const result = (Array.isArray(raw) ? raw : []).map(e => ({
       originIndex: e.originIndex,
       destinationIndex: e.destinationIndex,
-      durationSeconds: parseDuration(e.duration),
+      duration: e.duration,
       distanceMeters: e.distanceMeters,
       condition: e.condition,
     }));
