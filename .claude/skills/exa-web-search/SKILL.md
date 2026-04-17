@@ -13,7 +13,7 @@ description: >
 **Stage 1 → Stage 2a or 2b → done.**
 
 If Stage 1 results are irrelevant, rephrase and repeat.
-If Stage 2 cannot answer, rephrase the query and retry Stage 2, or switch to playwright-cli.
+If Stage 2a cannot answer, rephrase the query and retry Stage 2a, or switch to playwright-cli.
 
 ## Script
 
