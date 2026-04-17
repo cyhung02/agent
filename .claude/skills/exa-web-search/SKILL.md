@@ -21,7 +21,7 @@ Use the find-skill-script skill to locate `scripts/exa.sh` before running.
 
 **Stage 1 — Breadth (always start here)**
 
-Casts a wide net to locate relevant pages.
+Returns titles, highlights, and URLs. Use to survey what web information is available on the topic.
 
 ```bash
 bash /path/to/exa.sh search "query" [--fresh]
