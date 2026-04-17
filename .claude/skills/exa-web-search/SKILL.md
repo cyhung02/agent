@@ -39,7 +39,7 @@ bash /path/to/exa.sh contents "question" "url1" "url2" ...
 
 **Stage 2b — Depth (structured / JS-rendered pages)**
 
-Use `playwright-cli eval` to extract DOM directly — more token-efficient than text mode.
+Use the playwright-cli skill to extract DOM directly.
 Skip Stage 2a and go straight here if the target page is a SPA, table, or dynamically rendered.
 
 ---
