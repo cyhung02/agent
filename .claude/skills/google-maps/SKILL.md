@@ -9,20 +9,20 @@ Direct curl calls to Google Maps Platform APIs.
 
 ## Cloudflare Worker Proxy
 
-Use the proxy for Routes API calls (holds the API key server-side):
+All API calls go through the proxy (holds the API key server-side):
 
 ```
 https://routes.cyhung02.workers.dev
 ```
 
-- `POST /computeRoutes` → Routes API computeRoutes
-- `POST /computeRouteMatrix` → Routes API computeRouteMatrix
+| Path prefix | Upstream |
+|---|---|
+| `POST /computeRoutes` | Routes API computeRoutes |
+| `POST /computeRouteMatrix` | Routes API computeRouteMatrix |
+| `GET /maps/*` | Maps (Geocoding) API |
+| `GET /POST /v1/*` | Places API |
 
-For all other APIs (Geocoding, Places, etc.), call Google directly using `$GMAPS_API_KEY`.
-
-## API Key
-
-Read from env or user preferences: `GMAPS_API_KEY`
+Do **not** pass any API key in requests to the proxy — it injects the key automatically.
 
 ## Getting the User's Current Location
 
@@ -84,16 +84,15 @@ Use for precise street addresses or reverse geocoding. For general place names (
 **Forward (address → lat/lng):**
 
 ```bash
-curl -s --get "https://maps.googleapis.com/maps/api/geocode/json" \
+curl -s --get "https://routes.cyhung02.workers.dev/maps/api/geocode/json" \
   --data-urlencode "address=<address>" \
-  --data-urlencode "language=zh-TW" \
-  --data-urlencode "key=$GMAPS_API_KEY"
+  --data-urlencode "language=zh-TW"
 ```
 
 **Reverse (lat/lng → address):**
 
 ```bash
-curl -s "https://maps.googleapis.com/maps/api/geocode/json?latlng=<lat>,<lng>&language=zh-TW&key=$GMAPS_API_KEY"
+curl -s "https://routes.cyhung02.workers.dev/maps/api/geocode/json?latlng=<lat>,<lng>&language=zh-TW"
 ```
 
 - Key fields: `results[0].formatted_address`, `results[0].geometry.location.lat/lng`, `results[0].place_id`
@@ -106,8 +105,7 @@ Use for open exploration, restaurant recommendations (“新宿附近拉麵推�
 `locationBias` = soft preference, results may extend beyond the specified area.
 
 ```bash
-curl -s -X POST "https://places.googleapis.com/v1/places:searchText" \
-  -H "X-Goog-Api-Key: $GMAPS_API_KEY" \
+curl -s -X POST "https://routes.cyhung02.workers.dev/v1/places:searchText" \
   -H "X-Goog-FieldMask: places.id,places.displayName,places.formattedAddress,places.location" \
   -H "Content-Type: application/json" \
   -d '{"textQuery": "<query>", "maxResultCount": 5, "locationBias": {"circle": {"center": {"latitude": <lat>, "longitude": <lng>}, "radius": <meters>}}}'
@@ -127,8 +125,7 @@ Use when the user wants a specific facility type within an exact radius (“飯�
 `locationRestriction` = hard limit, results never exceed the specified radius.
 
 ```bash
-curl -s -X POST "https://places.googleapis.com/v1/places:searchNearby" \
-  -H "X-Goog-Api-Key: $GMAPS_API_KEY" \
+curl -s -X POST "https://routes.cyhung02.workers.dev/v1/places:searchNearby" \
   -H "X-Goog-FieldMask: places.id,places.displayName,places.formattedAddress,places.location" \
   -H "Content-Type: application/json" \
   -d '{"includedTypes": ["<type>"], "maxResultCount": 5, "locationRestriction": {"circle": {"center": {"latitude": <lat>, "longitude": <lng>}, "radius": <meters>}}}'
@@ -173,8 +170,7 @@ curl -s -X POST “https://routes.cyhung02.workers.dev/computeRouteMatrix” \
 ## 6. Place Details — Details by place_id
 
 ```bash
-curl -s "https://places.googleapis.com/v1/places/<place_id>" \
-  -H "X-Goog-Api-Key: $GMAPS_API_KEY" \
+curl -s "https://routes.cyhung02.workers.dev/v1/places/<place_id>" \
   -H "X-Goog-FieldMask: id,displayName,formattedAddress,location"
 ```
 
@@ -190,8 +186,7 @@ Additional FieldMask options (Pro SKU, free 5,000/month):
 **Step 1 — Get photo names** (skip if you already fetched Place Details with `photos` in FieldMask):
 
 ```bash
-curl -s "https://places.googleapis.com/v1/places/<place_id>" \
-  -H "X-Goog-Api-Key: $GMAPS_API_KEY" \
+curl -s "https://routes.cyhung02.workers.dev/v1/places/<place_id>" \
   -H "X-Goog-FieldMask: displayName,photos"
 # Returns photos[].name → path like "places/<id>/photos/<ref>"
 ```
@@ -199,8 +194,7 @@ curl -s "https://places.googleapis.com/v1/places/<place_id>" \
 **Step 2 — Fetch photo URL:**
 
 ```bash
-curl -s "https://places.googleapis.com/v1/<photo_name>/media?maxHeightPx=800&skipHttpRedirect=true" \
-  -H "X-Goog-Api-Key: $GMAPS_API_KEY"
+curl -s "https://routes.cyhung02.workers.dev/v1/<photo_name>/media?maxHeightPx=800&skipHttpRedirect=true"
 # Returns { "photoUri": "https://lh3.googleusercontent.com/..." }
 ```
 
