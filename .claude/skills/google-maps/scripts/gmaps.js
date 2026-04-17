@@ -68,6 +68,13 @@ function die(msg) {
 
 // --- Output normalizers ---
 
+function stripMapsUri(uri) {
+  if (!uri) return null;
+  const u = new URL(uri);
+  u.searchParams.delete('g_mp');
+  return u.toString();
+}
+
 function normalizePlaces(data) {
   return (data.places || []).map(p => ({
     id: p.id,
@@ -76,7 +83,7 @@ function normalizePlaces(data) {
     location: p.location ? { lat: p.location.latitude, lng: p.location.longitude } : null,
     types: p.types ?? [],
     primaryType: p.primaryType ?? null,
-    mapsUri: p.googleMapsUri ?? null,
+    mapsUri: stripMapsUri(p.googleMapsUri),
   }));
 }
 
@@ -234,7 +241,7 @@ switch (command) {
       location:          raw.location ? { lat: raw.location.latitude, lng: raw.location.longitude } : null,
       types:             raw.types ?? [],
       primaryType:       raw.primaryType ?? null,
-      mapsUri:           raw.googleMapsUri ?? null,
+      mapsUri:           stripMapsUri(raw.googleMapsUri),
       addressComponents: raw.addressComponents ?? [],
     }));
     break;
