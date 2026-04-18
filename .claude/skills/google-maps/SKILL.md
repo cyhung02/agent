@@ -5,7 +5,7 @@ description: Google Maps Platform skill for routing, geocoding, place search, pl
 
 # Google Maps Skill
 
-All API calls go through `gmaps.js`, which proxies to `routes.cyhung02.workers.dev`.
+All API calls go through `gmaps.js`.
 
 ## Step 0 — Install Dependencies (first time only)
 
