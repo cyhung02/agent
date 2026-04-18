@@ -2,3 +2,5 @@
 skills-lock.json
 .playwright-cli/
 .playwright/
+.claude/skills/google-maps/node_modules/
+.claude/skills/google-maps/package-lock.json
