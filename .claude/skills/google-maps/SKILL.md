@@ -33,7 +33,7 @@ Use the returned `latitude` and `longitude` as the origin or search center for s
 | 「新宿附近好吃的拉麵」 | `search` |
 | 「飯店300m內的便利商店或ATM」 | `nearby` |
 | 「這幾個景點怎麼排最省時間」 | `matrix` |
-| 「這個地點的電話/營業時間」 | `place` |
+| 已有 place_id 但無其他地點資訊 | `place` |
 | 「這個地點的照片」 | `photos` |
 
 -----
@@ -96,25 +96,27 @@ Output: `{ address, location: { lat, lng }, placeId }`
 ## 5. `search` — Places Text Search
 
 ```bash
-node <gmaps.js> search "新宿附近拉麵" [--lat <lat> --lng <lng> --radius <m>] [--min-rating 4.0] [--n 5]
+node <gmaps.js> search "新宿附近拉麵" [--lat <lat> --lng <lng> --radius <m>] [--min-rating 4.0] [--n 5] [--language zh-TW]
 ```
 
 - `--lat/--lng/--radius`: optional location bias (soft preference)
 - `--min-rating`: minimum rating threshold (0.0–5.0, steps of 0.5)
 - `--n`: number of results (default 5)
+- `--language`: BCP-47 language code for results (default `zh-TW`; common: `ja`, `ko`, `en`)
 
-Output: `[{ id, name, address, location, types, primaryType, mapsUri }]`
+Output: `[{ id, name, address, location, mapsUri, businessStatus, typeDisplayName }]`
 
 -----
 
 ## 6. `nearby` — Places Nearby Search
 
 ```bash
-node <gmaps.js> nearby --lat <lat> --lng <lng> --radius <m> --types <type1,type2,...> [--n 5]
+node <gmaps.js> nearby --lat <lat> --lng <lng> --radius <m> --types <type1,type2,...> [--n 5] [--language zh-TW]
 ```
 
 - `--radius`: hard limit in metres
 - `--types`: comma-separated, OR logic, max 50 (e.g. `--types convenience_store,atm`)
+- `--language`: BCP-47 language code for results (default `zh-TW`; common: `ja`, `ko`, `en`)
 - Common types: `restaurant` `cafe` `bar` `convenience_store` `supermarket` `pharmacy` `hospital` `atm` `bank` `gas_station` `electric_vehicle_charging_station` `parking` `subway_station` `bus_stop` `train_station` `hotel` `tourist_attraction` `museum` `park` `gym` `spa`
 - Full list: [references/place-types.md](references/place-types.md)
 
@@ -125,10 +127,12 @@ Output: same as `search`
 ## 7. `place` — Place Details
 
 ```bash
-node <gmaps.js> place <place_id>
+node <gmaps.js> place <place_id> [--language zh-TW]
 ```
 
-Output: `{ id, name, address, location, types, primaryType, mapsUri, addressComponents }`
+Output: `{ id, name, address, location, mapsUri, businessStatus, typeDisplayName }`
+
+`search` and `nearby` already return all the same fields — only call `place` if you already have a place_id and no other place data.
 
 -----
 

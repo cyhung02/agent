@@ -7,8 +7,8 @@ const { execFileSync } = require('child_process');
 
 const BASE = 'https://routes.cyhung02.workers.dev';
 
-const PLACES_FIELDMASK = 'places.id,places.displayName,places.formattedAddress,places.location,places.types,places.primaryType,places.googleMapsUri';
-const PLACE_DETAIL_FIELDMASK = 'id,displayName,formattedAddress,location,types,primaryType,googleMapsUri,addressComponents';
+const PLACES_FIELDMASK = 'places.id,places.displayName,places.formattedAddress,places.location,places.googleMapsUri,places.businessStatus,places.primaryTypeDisplayName';
+const PLACE_DETAIL_FIELDMASK = 'id,displayName,formattedAddress,location,googleMapsUri,businessStatus,primaryTypeDisplayName';
 const ROUTE_FIELDMASK = 'routes.duration,routes.distanceMeters,routes.legs.duration,routes.legs.distanceMeters';
 const ROUTE_TRANSIT_FIELDMASK = ROUTE_FIELDMASK + ',routes.legs.steps.transitDetails,routes.legs.steps.navigationInstruction';
 const MATRIX_FIELDMASK = 'originIndex,destinationIndex,duration,distanceMeters,status,condition';
@@ -81,9 +81,9 @@ function normalizePlaces(data) {
     name: p.displayName?.text ?? '',
     address: p.formattedAddress ?? '',
     location: p.location ? { lat: p.location.latitude, lng: p.location.longitude } : null,
-    types: p.types ?? [],
-    primaryType: p.primaryType ?? null,
     mapsUri: stripMapsUri(p.googleMapsUri),
+    businessStatus: p.businessStatus ?? null,
+    typeDisplayName: p.primaryTypeDisplayName?.text ?? null,
   }));
 }
 
@@ -196,7 +196,7 @@ switch (command) {
   case 'search': {
     const query = positional[0] ?? die('query required');
     const n = parseInt(args.n ?? '5');
-    const body = { textQuery: query, maxResultCount: n, languageCode: 'zh-TW' };
+    const body = { textQuery: query, maxResultCount: n, languageCode: args.language ?? 'zh-TW' };
     if (args['min-rating']) body.minRating = parseFloat(args['min-rating']);
     if (args.lat && args.lng) {
       body.locationBias = {
@@ -221,6 +221,7 @@ switch (command) {
     const body = {
       includedTypes: types,
       maxResultCount: n,
+      languageCode: args.language ?? 'zh-TW',
       locationRestriction: {
         circle: {
           center: { latitude: +lat, longitude: +lng },
@@ -236,17 +237,17 @@ switch (command) {
 
   case 'place': {
     const id = positional[0] ?? die('place_id required');
-    const raw = JSON.parse(curlGet(`${BASE}/v1/places/${id}`, PLACE_DETAIL_FIELDMASK));
+    const lang = args.language ?? 'zh-TW';
+    const raw = JSON.parse(curlGet(`${BASE}/v1/places/${id}?languageCode=${lang}`, PLACE_DETAIL_FIELDMASK));
     if (raw.error) die(`Places API error: ${JSON.stringify(raw.error)}`);
     console.log(JSON.stringify({
-      id:                raw.id,
-      name:              raw.displayName?.text ?? '',
-      address:           raw.formattedAddress ?? '',
-      location:          raw.location ? { lat: raw.location.latitude, lng: raw.location.longitude } : null,
-      types:             raw.types ?? [],
-      primaryType:       raw.primaryType ?? null,
-      mapsUri:           stripMapsUri(raw.googleMapsUri),
-      addressComponents: raw.addressComponents ?? [],
+      id:              raw.id,
+      name:            raw.displayName?.text ?? '',
+      address:         raw.formattedAddress ?? '',
+      location:        raw.location ? { lat: raw.location.latitude, lng: raw.location.longitude } : null,
+      mapsUri:         stripMapsUri(raw.googleMapsUri),
+      businessStatus:  raw.businessStatus ?? null,
+      typeDisplayName: raw.primaryTypeDisplayName?.text ?? null,
     }));
     break;
   }
