@@ -115,7 +115,6 @@ node <gmaps.js> search "新宿附近拉麵" [--lat <lat> --lng <lng> --radius <m
 - `--language`: BCP-47 language code for results (default `zh-TW`; common: `ja`, `ko`, `en`)
 
 Output: `[{ id, name, address, location, mapsUri, businessStatus, typeDisplayName, rating, userRatingCount }]`
-- `rating` and `userRatingCount` are `null` if unavailable
 
 -----
 
@@ -131,7 +130,7 @@ node <gmaps.js> nearby --lat <lat> --lng <lng> --radius <m> --types <type1,type2
 - Common types: `restaurant` `cafe` `bar` `convenience_store` `supermarket` `pharmacy` `hospital` `atm` `bank` `gas_station` `electric_vehicle_charging_station` `parking` `subway_station` `bus_stop` `train_station` `hotel` `tourist_attraction` `museum` `park` `gym` `spa`
 - Full list: [references/place-types.md](references/place-types.md)
 
-Output: same as `search` (includes `rating`, `userRatingCount`)
+Output: same as `search`
 
 -----
 
