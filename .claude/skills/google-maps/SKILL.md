@@ -7,7 +7,17 @@ description: Google Maps Platform skill for routing, geocoding, place search, pl
 
 All API calls go through `gmaps.js`, which proxies to `routes.cyhung02.workers.dev`.
 
-## Step 0 — Locate the Script
+## Step 0 — Install Dependencies (first time only)
+
+Use the **find-skill-script** skill to resolve the absolute path of `install-gmaps.sh` under the `scripts/` subdirectory, then run it:
+
+```bash
+bash <install-gmaps.sh path>
+```
+
+This installs the Playwright dependency required for rating lookups. Only needed once per environment.
+
+## Step 0.5 — Locate the Script
 
 Use the **find-skill-script** skill to resolve the absolute path of `gmaps.js` under the `scripts/` subdirectory. Use the returned path in all subsequent `node <gmaps.js path>` commands.
 
@@ -104,7 +114,11 @@ node <gmaps.js> search "新宿附近拉麵" [--lat <lat> --lng <lng> --radius <m
 - `--n`: number of results (default 5)
 - `--language`: BCP-47 language code for results (default `zh-TW`; common: `ja`, `ko`, `en`)
 
-Output: `[{ id, name, address, location, mapsUri, businessStatus, typeDisplayName }]`
+- `--no-rating`: skip rating lookup (faster, no Playwright)
+
+Output: `[{ id, name, address, location, mapsUri, businessStatus, typeDisplayName, rating, userRatingCount }]`
+- `rating` and `userRatingCount` are `null` if unavailable
+- First run (or after cookie expiry) will launch a headless browser to refresh the session cache — may take ~10s
 
 -----
 
@@ -117,10 +131,11 @@ node <gmaps.js> nearby --lat <lat> --lng <lng> --radius <m> --types <type1,type2
 - `--radius`: hard limit in metres
 - `--types`: comma-separated, OR logic, max 50 (e.g. `--types convenience_store,atm`)
 - `--language`: BCP-47 language code for results (default `zh-TW`; common: `ja`, `ko`, `en`)
+- `--no-rating`: skip rating lookup
 - Common types: `restaurant` `cafe` `bar` `convenience_store` `supermarket` `pharmacy` `hospital` `atm` `bank` `gas_station` `electric_vehicle_charging_station` `parking` `subway_station` `bus_stop` `train_station` `hotel` `tourist_attraction` `museum` `park` `gym` `spa`
 - Full list: [references/place-types.md](references/place-types.md)
 
-Output: same as `search`
+Output: same as `search` (includes `rating`, `userRatingCount`)
 
 -----
 
@@ -130,7 +145,9 @@ Output: same as `search`
 node <gmaps.js> place <place_id> [--language zh-TW]
 ```
 
-Output: `{ id, name, address, location, mapsUri, businessStatus, typeDisplayName }`
+- `--no-rating`: skip rating lookup
+
+Output: `{ id, name, address, location, mapsUri, businessStatus, typeDisplayName, rating, userRatingCount }`
 
 `search` and `nearby` already return all the same fields — only call `place` if you already have a place_id and no other place data.
 
