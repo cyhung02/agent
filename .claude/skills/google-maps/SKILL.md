@@ -5,8 +5,6 @@ description: Google Maps Platform skill for routing, geocoding, place search, pl
 
 # Google Maps Skill
 
-All API calls go through `gmaps.js`.
-
 ## Prerequisites (one-time): Install Dependencies
 
 Use the **find-skill-script** skill to resolve the absolute path of `install-gmaps.sh` under the `scripts/` subdirectory, then run it:
@@ -58,7 +56,7 @@ node <gmaps.js> route \
 ```
 
 - **TRANSIT may return empty results in Japan** — if result is `null` or `[]`, fall back to the **yahoo-transit** skill
-- **TRANSIT** automatically sets `computeAlternativeRoutes: true` and returns an array of routes; present all options to the user
+- **TRANSIT** returns an array of route options; present all options to the user
 - `--alternatives` flag forces multiple routes for non-TRANSIT modes
 
 Output (non-TRANSIT): `{ duration, distanceMeters, legs[] }`
@@ -77,7 +75,6 @@ node <gmaps.js> matrix \
 
 Output: flat array `[{ originIndex, destinationIndex, duration, distanceMeters, condition }]`
 - Check `condition === "ROUTE_EXISTS"` before reading distance/duration
-- Billed per element (origins × destinations)
 
 -----
 
@@ -176,5 +173,4 @@ Always pass `place_id` to `places_map_display_v0` — it fetches Enterprise-tier
 
 ## Important Notes
 
-- `matrix`: check `condition === "ROUTE_EXISTS"` before reading distance/duration — script returns all elements including unreachable pairs
 - Photo URLs expire — always fetch from a fresh `photos` call, do not cache

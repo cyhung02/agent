@@ -30,9 +30,9 @@ function sleep(ms) {
 
 async function curlRaw(args) {
   while (true) {
-    const result = execFileSync('curl', args, { encoding: 'utf8' });
-    if (result.includes('DNS cache overflow')) { await sleep(5000); continue; }
-    return result;
+    const { stdout } = await execFileAsync('curl', args, { encoding: 'utf8' });
+    if (stdout.includes('DNS cache overflow')) { await sleep(5000); continue; }
+    return stdout;
   }
 }
 
@@ -84,8 +84,8 @@ function stripMapsUri(uri) {
   return u.toString();
 }
 
-function normalizePlaces(data) {
-  return (data.places || []).map(p => ({
+function normalizePlace(p) {
+  return {
     id:              p.id,
     name:            p.displayName?.text ?? '',
     address:         p.formattedAddress ?? '',
@@ -93,7 +93,11 @@ function normalizePlaces(data) {
     mapsUri:         stripMapsUri(p.googleMapsUri),
     businessStatus:  p.businessStatus ?? null,
     typeDisplayName: p.primaryTypeDisplayName?.text ?? null,
-  }));
+  };
+}
+
+function normalizePlaces(data) {
+  return (data.places || []).map(normalizePlace);
 }
 
 // --- Rating helpers ---
@@ -179,7 +183,7 @@ async function fetchRatings(places) {
     places.map(p => {
       if (!p.id || !p.location) return Promise.resolve({ rating: null, userRatingCount: null });
       return fetchSingleRating(cache, p.id, p.name, p.location.lat, p.location.lng)
-        .catch(() => { rating: null, userRatingCount: null });
+        .catch(() => ({ rating: null, userRatingCount: null }));
     }),
   );
   return places.map((p, i) => ({ ...p, ...results[i] }));
@@ -294,7 +298,7 @@ const { args, positional } = parseArgs(rest);
 
     case 'search': {
       const query = positional[0] ?? die('query required');
-      const n     = parseInt(args.n ?? '5');
+      const n     = parseInt(args.n ?? '5', 10);
       const body  = { textQuery: query, maxResultCount: n, languageCode: args.language ?? 'zh-TW' };
       if (args['min-rating']) body.minRating = parseFloat(args['min-rating']);
       if (args.lat && args.lng) {
@@ -317,7 +321,7 @@ const { args, positional } = parseArgs(rest);
       const lng    = args.lng    ?? die('--lng required');
       const radius = args.radius ?? die('--radius required');
       const types  = (args.types ?? die('--types required')).split(',').map(t => t.trim());
-      const n      = parseInt(args.n ?? '5');
+      const n      = parseInt(args.n ?? '5', 10);
       const body   = {
         includedTypes: types,
         maxResultCount: n,
@@ -341,7 +345,7 @@ const { args, positional } = parseArgs(rest);
       const lang = args.language ?? 'zh-TW';
       const raw  = JSON.parse(await curlGet(`${BASE}/v1/places/${id}?languageCode=${lang}`, PLACE_DETAIL_FIELDMASK));
       if (raw.error) die(`Places API error: ${JSON.stringify(raw.error)}`);
-      const placeData = normalizePlaces({ places: [raw] })[0];
+      const placeData = normalizePlace(raw);
       if (placeData.id && placeData.location) {
         const rated = await fetchRatings([placeData]);
         console.log(JSON.stringify(rated[0]));
@@ -354,7 +358,7 @@ const { args, positional } = parseArgs(rest);
     case 'photos': {
       const id        = positional[0] ?? die('place_id required');
       const maxHeight = args['max-height'] ?? '800';
-      const n         = parseInt(args.n ?? '3');
+      const n         = parseInt(args.n ?? '3', 10);
 
       const detail     = JSON.parse(await curlGet(`${BASE}/v1/places/${id}`, 'displayName,photos'));
       const photoNames = (detail.photos ?? []).slice(0, n).map(p => p.name);
