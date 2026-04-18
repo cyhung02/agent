@@ -15,7 +15,7 @@ Use the **find-skill-script** skill to resolve the absolute path of `install-gma
 bash <install-gmaps.sh path>
 ```
 
-This installs the Playwright dependency required for rating lookups. Only needed once per environment.
+This installs the Playwright dependency. Only needed once per environment.
 
 ## Step 0.5 — Locate the Script
 
