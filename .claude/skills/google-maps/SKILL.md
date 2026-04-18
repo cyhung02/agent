@@ -17,7 +17,7 @@ bash <install-gmaps.sh path>
 
 Only needed once per environment.
 
-## Step 0.5 — Locate the Script
+## Prerequisites: Locate the Script
 
 Use the **find-skill-script** skill to resolve the absolute path of `gmaps.js` under the `scripts/` subdirectory. Use the returned path in all subsequent `node <gmaps.js path>` commands.
 
