@@ -7,7 +7,7 @@ description: Google Maps Platform skill for routing, geocoding, place search, pl
 
 All API calls go through `gmaps.js`.
 
-## Step 0 — Install Dependencies (first time only)
+## Prerequisites (one-time): Install Dependencies
 
 Use the **find-skill-script** skill to resolve the absolute path of `install-gmaps.sh` under the `scripts/` subdirectory, then run it:
 
