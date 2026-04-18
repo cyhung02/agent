@@ -25,24 +25,24 @@ const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 // --- HTTP helpers (curl for proxy compatibility) ---
 
 function sleep(ms) {
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+  return new Promise(r => setTimeout(r, ms));
 }
 
-function curlRaw(args) {
+async function curlRaw(args) {
   while (true) {
     const result = execFileSync('curl', args, { encoding: 'utf8' });
-    if (result.includes('DNS cache overflow')) { sleep(5000); continue; }
+    if (result.includes('DNS cache overflow')) { await sleep(5000); continue; }
     return result;
   }
 }
 
-function curlGet(url, fieldMask) {
+async function curlGet(url, fieldMask) {
   const flags = ['-s', '--fail'];
   if (fieldMask) flags.push('-H', `X-Goog-FieldMask: ${fieldMask}`);
   return curlRaw([...flags, url]);
 }
 
-function curlPost(url, fieldMask, body) {
+async function curlPost(url, fieldMask, body) {
   return curlRaw([
     '-s', '--fail',
     '-X', 'POST',
@@ -153,9 +153,8 @@ async function refreshCookies() {
 
     const cache = { cookies, savedAt: Date.now() };
     fs.writeFileSync(COOKIE_PATH, JSON.stringify(cache));
-    // Warm up the session — Google needs a moment after cookies are issued before the
-    // preview/place API returns full data. Wait then discard the result.
-    await new Promise(r => setTimeout(r, 2000));
+    // Google needs a moment after cookie issuance before preview/place returns full data.
+    await sleep(2000);
     await fetchSingleRating(cache, 'ChIJtxODuv6LGGAR7KPIhM48Zz0', '', 35.680488, 139.7675915).catch(() => {});
     return cache;
   } catch (err) {
@@ -164,11 +163,14 @@ async function refreshCookies() {
   }
 }
 
+let cookieCache = null;
+
 async function getCookies() {
-  let cache = null;
-  try { cache = JSON.parse(fs.readFileSync(COOKIE_PATH, 'utf8')); } catch {}
-  if (cache && (Date.now() - cache.savedAt) < CACHE_TTL_MS) return cache;
-  return refreshCookies();
+  if (cookieCache && (Date.now() - cookieCache.savedAt) < CACHE_TTL_MS) return cookieCache;
+  try { cookieCache = JSON.parse(fs.readFileSync(COOKIE_PATH, 'utf8')); } catch {}
+  if (cookieCache && (Date.now() - cookieCache.savedAt) < CACHE_TTL_MS) return cookieCache;
+  cookieCache = await refreshCookies();
+  return cookieCache;
 }
 
 async function fetchRatings(places) {
@@ -177,7 +179,7 @@ async function fetchRatings(places) {
     places.map(p => {
       if (!p.id || !p.location) return Promise.resolve({ rating: null, userRatingCount: null });
       return fetchSingleRating(cache, p.id, p.name, p.location.lat, p.location.lng)
-        .catch(() => ({ rating: null, userRatingCount: null }));
+        .catch(() => { rating: null, userRatingCount: null });
     }),
   );
   return places.map((p, i) => ({ ...p, ...results[i] }));
@@ -210,7 +212,7 @@ const { args, positional } = parseArgs(rest);
       };
 
       const fieldMask = isTransit ? ROUTE_TRANSIT_FIELDMASK : ROUTE_FIELDMASK;
-      const raw = JSON.parse(curlPost(`${BASE}/computeRoutes`, fieldMask, body));
+      const raw = JSON.parse(await curlPost(`${BASE}/computeRoutes`, fieldMask, body));
       const routes = (raw.routes ?? []).map(r => ({
         duration:      r.duration,
         distanceMeters: r.distanceMeters,
@@ -245,7 +247,7 @@ const { args, positional } = parseArgs(rest);
         languageCode: 'zh-TW',
       };
 
-      const raw    = JSON.parse(curlPost(`${BASE}/computeRouteMatrix`, MATRIX_FIELDMASK, body));
+      const raw    = JSON.parse(await curlPost(`${BASE}/computeRouteMatrix`, MATRIX_FIELDMASK, body));
       const result = (Array.isArray(raw) ? raw : []).map(e => ({
         originIndex:      e.originIndex,
         destinationIndex: e.destinationIndex,
@@ -262,7 +264,7 @@ const { args, positional } = parseArgs(rest);
       const url = new URL(`${BASE}/maps/api/geocode/json`);
       url.searchParams.set('address', address);
       url.searchParams.set('language', 'zh-TW');
-      const raw = JSON.parse(curlGet(url.toString()));
+      const raw = JSON.parse(await curlGet(url.toString()));
       if (raw.status !== 'OK') die(`Geocoding failed: ${raw.status}`);
       const r = raw.results[0];
       console.log(JSON.stringify({
@@ -279,7 +281,7 @@ const { args, positional } = parseArgs(rest);
       const url = new URL(`${BASE}/maps/api/geocode/json`);
       url.searchParams.set('latlng', `${lat},${lng}`);
       url.searchParams.set('language', 'zh-TW');
-      const raw = JSON.parse(curlGet(url.toString()));
+      const raw = JSON.parse(await curlGet(url.toString()));
       if (raw.status !== 'OK') die(`Reverse geocoding failed: ${raw.status}`);
       const r = raw.results[0];
       console.log(JSON.stringify({
@@ -303,10 +305,10 @@ const { args, positional } = parseArgs(rest);
           },
         };
       }
-      const raw = JSON.parse(curlPost(`${BASE}/v1/places:searchText`, PLACES_FIELDMASK, body));
+      const raw = JSON.parse(await curlPost(`${BASE}/v1/places:searchText`, PLACES_FIELDMASK, body));
       if (raw.error) die(`Places API error: ${JSON.stringify(raw.error)}`);
       const places = normalizePlaces(raw);
-      console.log(JSON.stringify(args['no-rating'] ? places : await fetchRatings(places)));
+      console.log(JSON.stringify(await fetchRatings(places)));
       break;
     }
 
@@ -327,28 +329,20 @@ const { args, positional } = parseArgs(rest);
           },
         },
       };
-      const raw = JSON.parse(curlPost(`${BASE}/v1/places:searchNearby`, PLACES_FIELDMASK, body));
+      const raw = JSON.parse(await curlPost(`${BASE}/v1/places:searchNearby`, PLACES_FIELDMASK, body));
       if (raw.error) die(`Places API error: ${JSON.stringify(raw.error)}`);
       const places = normalizePlaces(raw);
-      console.log(JSON.stringify(args['no-rating'] ? places : await fetchRatings(places)));
+      console.log(JSON.stringify(await fetchRatings(places)));
       break;
     }
 
     case 'place': {
       const id   = positional[0] ?? die('place_id required');
       const lang = args.language ?? 'zh-TW';
-      const raw  = JSON.parse(curlGet(`${BASE}/v1/places/${id}?languageCode=${lang}`, PLACE_DETAIL_FIELDMASK));
+      const raw  = JSON.parse(await curlGet(`${BASE}/v1/places/${id}?languageCode=${lang}`, PLACE_DETAIL_FIELDMASK));
       if (raw.error) die(`Places API error: ${JSON.stringify(raw.error)}`);
-      const placeData = {
-        id:              raw.id,
-        name:            raw.displayName?.text ?? '',
-        address:         raw.formattedAddress ?? '',
-        location:        raw.location ? { lat: raw.location.latitude, lng: raw.location.longitude } : null,
-        mapsUri:         stripMapsUri(raw.googleMapsUri),
-        businessStatus:  raw.businessStatus ?? null,
-        typeDisplayName: raw.primaryTypeDisplayName?.text ?? null,
-      };
-      if (!args['no-rating'] && placeData.id && placeData.location) {
+      const placeData = normalizePlaces({ places: [raw] })[0];
+      if (placeData.id && placeData.location) {
         const rated = await fetchRatings([placeData]);
         console.log(JSON.stringify(rated[0]));
       } else {
@@ -362,15 +356,17 @@ const { args, positional } = parseArgs(rest);
       const maxHeight = args['max-height'] ?? '800';
       const n         = parseInt(args.n ?? '3');
 
-      const detail     = JSON.parse(curlGet(`${BASE}/v1/places/${id}`, 'displayName,photos'));
+      const detail     = JSON.parse(await curlGet(`${BASE}/v1/places/${id}`, 'displayName,photos'));
       const photoNames = (detail.photos ?? []).slice(0, n).map(p => p.name);
       if (photoNames.length === 0) { console.log(JSON.stringify([])); break; }
 
-      const uris = photoNames.map(name => {
-        const url = `${BASE}/v1/${name}/media?maxHeightPx=${maxHeight}&skipHttpRedirect=true`;
-        const res = JSON.parse(curlGet(url));
-        return res.photoUri ?? null;
-      }).filter(Boolean);
+      const uris = (await Promise.all(
+        photoNames.map(async name => {
+          const url = `${BASE}/v1/${name}/media?maxHeightPx=${maxHeight}&skipHttpRedirect=true`;
+          const res = JSON.parse(await curlGet(url));
+          return res.photoUri ?? null;
+        }),
+      )).filter(Boolean);
 
       console.log(JSON.stringify(uris));
       break;

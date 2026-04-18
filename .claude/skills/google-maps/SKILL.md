@@ -75,7 +75,7 @@ node <gmaps.js> matrix \
   --mode DRIVE|WALK
 ```
 
-Output: flat array `[{ originIndex, destinationIndex, durationSeconds, distanceMeters, condition }]`
+Output: flat array `[{ originIndex, destinationIndex, duration, distanceMeters, condition }]`
 - Check `condition === "ROUTE_EXISTS"` before reading distance/duration
 - Billed per element (origins × destinations)
 
@@ -114,11 +114,8 @@ node <gmaps.js> search "新宿附近拉麵" [--lat <lat> --lng <lng> --radius <m
 - `--n`: number of results (default 5)
 - `--language`: BCP-47 language code for results (default `zh-TW`; common: `ja`, `ko`, `en`)
 
-- `--no-rating`: skip rating lookup (faster, no Playwright)
-
 Output: `[{ id, name, address, location, mapsUri, businessStatus, typeDisplayName, rating, userRatingCount }]`
 - `rating` and `userRatingCount` are `null` if unavailable
-- First run (or after cookie expiry) will launch a headless browser to refresh the session cache — may take ~10s
 
 -----
 
@@ -131,7 +128,6 @@ node <gmaps.js> nearby --lat <lat> --lng <lng> --radius <m> --types <type1,type2
 - `--radius`: hard limit in metres
 - `--types`: comma-separated, OR logic, max 50 (e.g. `--types convenience_store,atm`)
 - `--language`: BCP-47 language code for results (default `zh-TW`; common: `ja`, `ko`, `en`)
-- `--no-rating`: skip rating lookup
 - Common types: `restaurant` `cafe` `bar` `convenience_store` `supermarket` `pharmacy` `hospital` `atm` `bank` `gas_station` `electric_vehicle_charging_station` `parking` `subway_station` `bus_stop` `train_station` `hotel` `tourist_attraction` `museum` `park` `gym` `spa`
 - Full list: [references/place-types.md](references/place-types.md)
 
@@ -144,8 +140,6 @@ Output: same as `search` (includes `rating`, `userRatingCount`)
 ```bash
 node <gmaps.js> place <place_id> [--language zh-TW]
 ```
-
-- `--no-rating`: skip rating lookup
 
 Output: `{ id, name, address, location, mapsUri, businessStatus, typeDisplayName, rating, userRatingCount }`
 
