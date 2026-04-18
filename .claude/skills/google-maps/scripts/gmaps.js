@@ -18,16 +18,9 @@ const ROUTE_FIELDMASK        = 'routes.duration,routes.distanceMeters,routes.leg
 const ROUTE_TRANSIT_FIELDMASK = ROUTE_FIELDMASK + ',routes.legs.steps.transitDetails,routes.legs.steps.navigationInstruction';
 const MATRIX_FIELDMASK       = 'originIndex,destinationIndex,duration,distanceMeters,status,condition';
 
-const RATING_CACHE_PATH = path.join(os.homedir(), '.gmaps-rating-cache.json');
+const COOKIE_PATH = path.join(os.homedir(), '.gmaps-cookie.json');
 
-// Used to validate the cache before each use and to capture the pb zoom value
-const KNOWN_PLACE = {
-  id:             'ChIJtxODuv6LGGAR7KPIhM48Zz0',
-  name:           '星巴克 JR東海 東京車站新幹線南月台內店',
-  lat:            35.680488,
-  lng:            139.7675915,
-  expectedRating: 3.7,
-};
+const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 // --- HTTP helpers (curl for proxy compatibility) ---
 
@@ -117,16 +110,14 @@ function chijToHex(id) {
   return `0x${high.toString(16)}:0x${low.toString(16)}`;
 }
 
-// Builds the pb parameter for maps/preview/place using the zoom value captured from a real
-// browser request. The 14-token message format was verified against live Google Maps traffic.
-function buildPb(zoom, hexId, name, lat, lng) {
-  const encodedName = Buffer.from(name).toString('base64url');
-  return `!1m14!1s${hexId}!2z${encodedName}!3m8!1m3!1d${zoom}!2d${lng}!3d${lat}!3m2!1i1024!2i768!4f13.1!4m2!3d${lat}!4d${lng}`;
+// Minimal pb: only hexId and location are required (ablation-tested).
+function buildPb(hexId, lat, lng) {
+  return `!1m7!1s${hexId}!3m5!1m3!1d0!2d${lng}!3d${lat}!4f13.1`;
 }
 
 async function fetchSingleRating(cache, id, name, lat, lng) {
   const hexId = chijToHex(id);
-  const pb    = buildPb(cache.zoom, hexId, name, lat, lng);
+  const pb    = buildPb(hexId, lat, lng);
   const cookieHeader = cache.cookies.map(c => `${c.name}=${c.value}`).join('; ');
   const url = `https://www.google.com/maps/preview/place?authuser=0&hl=en&gl=us&q=${encodeURIComponent(name)}&pb=${encodeURIComponent(pb)}`;
   const { stdout } = await execFileAsync('curl', [
@@ -140,22 +131,9 @@ async function fetchSingleRating(cache, id, name, lat, lng) {
   return { rating: parseFloat(m[1]), userRatingCount: parseInt(m[2], 10) };
 }
 
-async function validateCache(cache) {
-  try {
-    const r = await fetchSingleRating(
-      cache, KNOWN_PLACE.id, KNOWN_PLACE.name, KNOWN_PLACE.lat, KNOWN_PLACE.lng,
-    );
-    return r.rating !== null && Math.abs(r.rating - KNOWN_PLACE.expectedRating) < 0.5;
-  } catch {
-    return false;
-  }
-}
-
-// Launches a headless browser, navigates to the known place on Google Maps, intercepts
-// the internal maps/preview/place request to extract the real zoom value, and saves cookies.
-async function refreshRatingCache() {
+async function refreshCookies() {
   const { chromium } = require('playwright');
-  process.stderr.write('[gmaps] refreshing rating cache via Playwright...\n');
+  process.stderr.write('[gmaps] refreshing cookies via Playwright...\n');
 
   const proxyUrl = process.env.HTTP_PROXY || process.env.http_proxy || '';
   let proxy;
@@ -169,29 +147,16 @@ async function refreshRatingCache() {
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
     });
     const page = await context.newPage();
-
-    const reqPromise = page.waitForRequest(
-      req => req.url().includes('/maps/preview/place'),
-      { timeout: 30000 },
-    );
-    // place_id: URL reliably loads the place detail panel and triggers maps/preview/place
-    await page.goto(
-      `https://www.google.com/maps?q=place_id:${KNOWN_PLACE.id}`,
-      { waitUntil: 'domcontentloaded', timeout: 30000 },
-    );
-    const intercepted  = await reqPromise;
-    const capturedPb   = new URL(intercepted.url()).searchParams.get('pb');
-    if (!capturedPb) throw new Error('pb parameter not found in intercepted request');
-
-    // Extract only the zoom value; everything else is reconstructed from the formula
-    const zoomMatch = capturedPb.match(/!3m8!1m3!1d([0-9.]+)/);
-    const zoom      = zoomMatch ? zoomMatch[1] : '1000';
-
+    await page.goto('https://www.google.com/maps?q=place_id:ChIJtxODuv6LGGAR7KPIhM48Zz0', { waitUntil: 'load', timeout: 30000 });
     const cookies = await context.cookies(['https://www.google.com']);
     await browser.close();
 
-    const cache = { cookies, zoom, savedAt: Date.now() };
-    fs.writeFileSync(RATING_CACHE_PATH, JSON.stringify(cache));
+    const cache = { cookies, savedAt: Date.now() };
+    fs.writeFileSync(COOKIE_PATH, JSON.stringify(cache));
+    // Warm up the session — Google needs a moment after cookies are issued before the
+    // preview/place API returns full data. Wait then discard the result.
+    await new Promise(r => setTimeout(r, 2000));
+    await fetchSingleRating(cache, 'ChIJtxODuv6LGGAR7KPIhM48Zz0', '', 35.680488, 139.7675915).catch(() => {});
     return cache;
   } catch (err) {
     await browser.close();
@@ -199,18 +164,15 @@ async function refreshRatingCache() {
   }
 }
 
-async function getCache() {
+async function getCookies() {
   let cache = null;
-  try { cache = JSON.parse(fs.readFileSync(RATING_CACHE_PATH, 'utf8')); } catch {}
-  if (cache && await validateCache(cache)) return cache;
-  cache = await refreshRatingCache();
-  // Skip post-refresh validation to avoid immediate re-validation hitting rate limits.
-  // The next call will validate naturally; if cookies are broken, refresh will re-run.
-  return cache;
+  try { cache = JSON.parse(fs.readFileSync(COOKIE_PATH, 'utf8')); } catch {}
+  if (cache && (Date.now() - cache.savedAt) < CACHE_TTL_MS) return cache;
+  return refreshCookies();
 }
 
 async function fetchRatings(places) {
-  const cache   = await getCache();
+  const cache   = await getCookies();
   const results = await Promise.all(
     places.map(p => {
       if (!p.id || !p.location) return Promise.resolve({ rating: null, userRatingCount: null });
