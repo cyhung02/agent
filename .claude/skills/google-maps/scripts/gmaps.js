@@ -14,8 +14,10 @@ const BASE = 'https://routes.cyhung02.workers.dev';
 
 const PLACES_FIELDMASK       = 'places.id,places.displayName,places.formattedAddress,places.location,places.googleMapsUri,places.businessStatus,places.primaryTypeDisplayName';
 const PLACE_DETAIL_FIELDMASK = 'id,displayName,formattedAddress,location,googleMapsUri,businessStatus,primaryTypeDisplayName';
-const ROUTE_FIELDMASK        = 'routes.duration,routes.distanceMeters,routes.legs.duration,routes.legs.distanceMeters,routes.legs.steps.staticDuration,routes.legs.steps.distanceMeters,routes.legs.steps.navigationInstruction';
-const ROUTE_TRANSIT_FIELDMASK = ROUTE_FIELDMASK + ',routes.legs.steps.transitDetails';
+const ROUTE_BASE_FIELDMASK         = 'routes.duration,routes.distanceMeters,routes.legs.duration,routes.legs.distanceMeters';
+const ROUTE_STEPS_FIELDMASK        = ROUTE_BASE_FIELDMASK + ',routes.legs.steps.staticDuration,routes.legs.steps.distanceMeters,routes.legs.steps.navigationInstruction';
+const ROUTE_TRANSIT_FIELDMASK      = ROUTE_BASE_FIELDMASK + ',routes.legs.steps.staticDuration,routes.legs.steps.distanceMeters,routes.legs.steps.transitDetails';
+const ROUTE_TRANSIT_FULL_FIELDMASK = ROUTE_TRANSIT_FIELDMASK + ',routes.legs.steps.navigationInstruction';
 const MATRIX_FIELDMASK       = 'originIndex,destinationIndex,duration,distanceMeters,status,condition';
 
 const COOKIE_PATH = path.join(os.homedir(), '.gmaps-cookie.json');
@@ -42,12 +44,14 @@ async function curlGet(url, fieldMask) {
   return curlRaw([...flags, url]);
 }
 
-async function curlPost(url, fieldMask, body) {
+async function curlPost(url, fieldMask, body, extraHeaders = []) {
+  const headerFlags = extraHeaders.flatMap(h => ['-H', h]);
   return curlRaw([
     '-s', '--fail',
     '-X', 'POST',
     '-H', `X-Goog-FieldMask: ${fieldMask}`,
     '-H', 'Content-Type: application/json',
+    ...headerFlags,
     '-d', JSON.stringify(body),
     url,
   ]);
@@ -92,6 +96,67 @@ function parsePoint(str, flag) {
 function parsePoints(str, flag) {
   if (typeof str !== 'string') die(`${flag} required (format: "lat,lng;lat,lng;...")`);
   return str.split(';').map(s => parsePoint(s.trim(), flag));
+}
+
+// --- Formatters ---
+
+function formatDuration(secStr) {
+  const total = parseInt(secStr, 10);
+  if (!Number.isFinite(total)) return null;
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const parts = [];
+  if (h) parts.push(h + 'h');
+  if (m || (h && s)) parts.push(m + 'm');
+  if (s || (!h && !m)) parts.push(s + 's');
+  return parts.join('');
+}
+
+function formatDistance(meters) {
+  if (!Number.isFinite(meters)) return null;
+  return meters >= 1000 ? (meters / 1000).toFixed(1) + 'km' : meters + 'm';
+}
+
+function normalizeTransit(t) {
+  if (!t) return null;
+  const line    = t.transitLine ?? {};
+  const vehicle = line.vehicle ?? {};
+  const stops   = t.stopDetails ?? {};
+  const loc = p => p?.location?.latLng
+    ? { lat: p.location.latLng.latitude, lng: p.location.latLng.longitude }
+    : null;
+  return {
+    line:        line.name ?? null,
+    headsign:    t.headsign ?? null,
+    vehicleType: vehicle.type ?? null,
+    from: { name: stops.departureStop?.name ?? null, location: loc(stops.departureStop), time: stops.departureTime ?? null },
+    to:   { name: stops.arrivalStop?.name   ?? null, location: loc(stops.arrivalStop),   time: stops.arrivalTime   ?? null },
+    stopCount:   t.stopCount ?? null,
+  };
+}
+
+// Merge adjacent walking steps (no transit field) by summing seconds + metres.
+function mergeWalkSteps(steps) {
+  const out = [];
+  let walkSec = 0, walkM = 0;
+  const flush = () => {
+    if (walkSec || walkM) {
+      out.push({ duration: formatDuration(walkSec + 's'), distance: formatDistance(walkM) });
+      walkSec = 0; walkM = 0;
+    }
+  };
+  for (const s of steps) {
+    if (s.transit) {
+      flush();
+      out.push(s);
+    } else {
+      walkSec += s._sec ?? 0;
+      walkM   += s._m   ?? 0;
+    }
+  }
+  flush();
+  return out;
 }
 
 // --- Output normalizers ---
@@ -229,6 +294,7 @@ const { args, positional } = parseArgs(rest);
       const to   = parsePoint(args.to,   '--to');
       const mode = checkMode((args.mode ?? 'WALK').toUpperCase());
       const isTransit = mode === 'TRANSIT';
+      const wantSteps = !!args.steps;
 
       const body = {
         origin:      { location: { latLng: { latitude: from.lat, longitude: from.lng } } },
@@ -251,22 +317,63 @@ const { args, positional } = parseArgs(rest);
         body.routingPreference = 'TRAFFIC_AWARE_OPTIMAL';
       }
 
-      const fieldMask = isTransit ? ROUTE_TRANSIT_FIELDMASK : ROUTE_FIELDMASK;
-      const raw = JSON.parse(await curlPost(`${BASE}/computeRoutes`, fieldMask, body));
-      const routes = (raw.routes ?? []).map(r => ({
-        duration:      r.duration,
-        distanceMeters: r.distanceMeters,
-        legs: (r.legs ?? []).map(l => ({
-          duration:      l.duration,
-          distanceMeters: l.distanceMeters,
-          steps: (l.steps ?? []).map(s => ({
-            duration:       s.staticDuration ?? null,
-            distanceMeters: s.distanceMeters ?? null,
-            instruction:    s.navigationInstruction?.instructions ?? null,
-            ...(isTransit && { transitDetails: s.transitDetails ?? null }),
-          })).filter(s => s.instruction || s.transitDetails),
-        })),
-      }));
+      let fieldMask = isTransit
+        ? (wantSteps ? ROUTE_TRANSIT_FULL_FIELDMASK : ROUTE_TRANSIT_FIELDMASK)
+        : (wantSteps ? ROUTE_STEPS_FIELDMASK        : ROUTE_BASE_FIELDMASK);
+      const extraHeaders = [];
+      if (body.optimizeWaypointOrder) {
+        fieldMask += ',routes.optimizedIntermediateWaypointIndex';
+        extraHeaders.push('X-Server-Timeout: 10');
+      }
+
+      const raw = JSON.parse(await curlPost(`${BASE}/computeRoutes`, fieldMask, body, extraHeaders));
+
+      const buildStep = s => {
+        const sec = parseInt(s.staticDuration, 10);
+        const m   = s.distanceMeters ?? 0;
+        const out = {
+          duration: formatDuration(s.staticDuration),
+          distance: formatDistance(m),
+          _sec: Number.isFinite(sec) ? sec : 0,
+          _m:   m,
+        };
+        const transit = normalizeTransit(s.transitDetails);
+        if (transit) out.transit = transit;
+        if (wantSteps && s.navigationInstruction?.instructions) {
+          out.instruction = s.navigationInstruction.instructions;
+        }
+        return out;
+      };
+
+      const stripPrivate = ({ _sec, _m, ...rest }) => rest;
+
+      const buildLeg = l => {
+        let steps = (l.steps ?? []).map(buildStep);
+        if (isTransit && !wantSteps) steps = mergeWalkSteps(steps);
+        const leg = {
+          duration: formatDuration(l.duration),
+          distance: formatDistance(l.distanceMeters),
+        };
+        if (isTransit || wantSteps) leg.steps = steps.map(stripPrivate);
+        return leg;
+      };
+
+      const routes = (raw.routes ?? []).map(r => {
+        const legs = (r.legs ?? []).map(buildLeg);
+        const routeOut = {
+          duration: formatDuration(r.duration),
+          distance: formatDistance(r.distanceMeters),
+        };
+        if (r.optimizedIntermediateWaypointIndex) {
+          routeOut.optimizedOrder = r.optimizedIntermediateWaypointIndex;
+        }
+        if (legs.length === 1) {
+          if (legs[0].steps) routeOut.steps = legs[0].steps;
+        } else if (legs.length > 1) {
+          routeOut.legs = legs;
+        }
+        return routeOut;
+      });
 
       console.log(JSON.stringify(isTransit ? routes : (routes[0] ?? null)));
       break;
@@ -295,8 +402,8 @@ const { args, positional } = parseArgs(rest);
       const result = (Array.isArray(raw) ? raw : []).map(e => ({
         originIndex:      e.originIndex,
         destinationIndex: e.destinationIndex,
-        duration:         e.duration,
-        distanceMeters:   e.distanceMeters,
+        duration:         formatDuration(e.duration),
+        distance:         formatDistance(e.distanceMeters),
         condition:        e.condition,
       }));
       console.log(JSON.stringify(result));

@@ -55,17 +55,33 @@ node <gmaps.js> route \
   --mode WALK|DRIVE|TRANSIT|BICYCLE \
   [--via "lat,lng;lat,lng;..."] \
   [--traffic] \
-  [--optimize-waypoints]
+  [--optimize-waypoints] \
+  [--steps]
 ```
 
 - `--via`: up to 25 intermediate waypoints, semicolon-separated
 - `--traffic`: real-time traffic-aware routing (DRIVE only)
-- `--optimize-waypoints`: reorder `--via` points for shortest total route
+- `--optimize-waypoints`: reorder `--via` points for shortest total route; response adds `optimizedOrder` (original `--via` indices in the new visit order, e.g. `[1,2,0]`)
+- `--steps`: include turn-by-turn `instruction` on each step (omit for a lighter response)
 - **TRANSIT may return empty results in Japan** — if result is `null` or `[]`, fall back to the **yahoo-transit** skill
 - **TRANSIT** returns an array of route options; present all options to the user
 
-Output (non-TRANSIT): `{ duration, distanceMeters, legs[{ duration, distanceMeters, steps[{ duration, distanceMeters, instruction }] }] }`
-Output (TRANSIT): array of routes, each with `legs[].steps[].transitDetails`
+`duration` is formatted like `"1h2m3s"` (omits zero leading parts). `distance` is `"80.1km"` (≥1000 m, 1 decimal) or `"181m"`.
+
+**Output shape**:
+- Top level per route: `{ duration, distance, steps?, legs? }`
+  - Single-leg (no `--via`): `steps` appears at route level; no `legs` wrapper
+  - Multi-leg (with `--via`): `legs: [{ duration, distance, steps? }]`; no top-level `steps`
+- Each step: `{ duration, distance, transit?, instruction? }`
+  - Presence of `transit` identifies a transit step; absence means walking
+  - `transit`: `{ line, headsign, vehicleType, from:{name,location,time}, to:{name,location,time}, stopCount }`
+  - `instruction` only present with `--steps`
+- Non-TRANSIT, no `--steps`: no `steps` field at all
+- Non-TRANSIT, `--steps`: every step has `instruction`
+- TRANSIT, no `--steps`: steps always included; adjacent walking steps are merged into a single `{ duration, distance }` entry
+- TRANSIT, `--steps`: steps include `instruction` for both walking and transit segments; walks are not merged
+
+Non-TRANSIT returns a single route object (or `null`). TRANSIT returns an array of route options.
 
 -----
 
@@ -81,7 +97,8 @@ node <gmaps.js> matrix \
 
 - `--traffic`: real-time traffic-aware routing (DRIVE only)
 
-Output: flat array `[{ originIndex, destinationIndex, duration, distanceMeters, condition }]`
+Output: flat array `[{ originIndex, destinationIndex, duration, distance, condition }]`
+- `duration` formatted as `"14m44s"`; `distance` as `"5.7km"` or `"181m"`
 - Check `condition === "ROUTE_EXISTS"` before reading distance/duration
 
 -----
