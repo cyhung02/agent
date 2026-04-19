@@ -61,27 +61,32 @@ node <gmaps.js> route \
 
 - `--via`: up to 25 intermediate waypoints, semicolon-separated
 - `--traffic`: real-time traffic-aware routing (DRIVE only)
-- `--optimize-waypoints`: reorder `--via` points for shortest total route; response adds `optimizedOrder` (original `--via` indices in the new visit order, e.g. `[1,2,0]`)
+- `--optimize-waypoints`: reorder `--via` points for shortest total route
 - `--steps`: include turn-by-turn `instruction` on each step (omit for a lighter response)
-- **TRANSIT may return empty results in Japan** — if result is `null` or `[]`, fall back to the **yahoo-transit** skill
-- **TRANSIT** returns an array of route options; present all options to the user
+- **TRANSIT** returns an array of route options; present all options to the user. If empty or `null`, fall back to the **yahoo-transit** skill (common in Japan).
+- Other modes return a single route object or `null`.
 
-`duration` is formatted like `"1h2m3s"` (omits zero leading parts). `distance` is `"80.1km"` (≥1000 m, 1 decimal) or `"181m"`.
+**Output schema**:
 
-**Output shape**:
-- Top level per route: `{ duration, distance, steps?, legs? }`
-  - Single-leg (no `--via`): `steps` appears at route level; no `legs` wrapper
-  - Multi-leg (with `--via`): `legs: [{ duration, distance, steps? }]`; no top-level `steps`
-- Each step: `{ duration, distance, transit?, instruction? }`
-  - Presence of `transit` identifies a transit step; absence means walking
-  - `transit`: `{ line, headsign, vehicleType, from:{name,location,time}, to:{name,location,time}, stopCount }`
-  - `instruction` only present with `--steps`
-- Non-TRANSIT, no `--steps`: no `steps` field at all
-- Non-TRANSIT, `--steps`: every step has `instruction`
-- TRANSIT, no `--steps`: steps always included; adjacent walking steps are merged into a single `{ duration, distance }` entry
-- TRANSIT, `--steps`: steps include `instruction` for both walking and transit segments; walks are not merged
+```
+Route: { duration, distance, steps?, legs?, optimizedOrder? }
+  - legs: array of segments, one per pair of adjacent waypoints; only present with --via
+  - steps: array of movement/turn/transit units within a leg
+  - optimizedOrder: present with --optimize-waypoints; original --via indices in new visit order, e.g. [1,2,0]
 
-Non-TRANSIT returns a single route object (or `null`). TRANSIT returns an array of route options.
+Leg: { duration, distance, steps? }
+
+Step: { duration, distance, transit?, instruction? }
+  - transit field present = transit segment; absent = walking segment
+  - instruction: turn-by-turn text (only with --steps)
+
+Transit: { line, headsign, vehicleType, from, to, stopCount }
+  - line: route name (includes route number for buses)
+  - headsign: direction/terminus shown on the vehicle
+  - vehicleType: BUS / SUBWAY / TRAIN / HEAVY_RAIL / TRAM / ...
+  - from / to: boarding / alighting stop, each { name, location:{lat,lng}, time (ISO 8601) }
+  - stopCount: number of stops traversed on this transit segment
+```
 
 -----
 
@@ -176,7 +181,7 @@ node <gmaps.js> photos <place_id> [--max-height 800] [--n 3]
 
 Output: array of photo URLs `["https://lh3.googleusercontent.com/..."]`
 
-Download and display:
+In Claude.ai environment, download and display via:
 ```bash
 curl -sL "<photoUri>" -o /mnt/user-data/outputs/place_photo.jpg
 # Then use present_files tool to display
@@ -192,7 +197,7 @@ When calling `places_map_display_v0`, always prepend the search center as the fi
 { "latitude": <lat>, "longitude": <lng>, "name": "📍 <location name>", "notes": "Search center" }
 ```
 
-Always pass `place_id` to `places_map_display_v0` — it fetches Enterprise-tier data (rating, opening hours, phone, photos) at no cost.
+Always pass `place_id` to `places_map_display_v0` — it fetches richer data (rating, opening hours, phone, photos).
 
 -----
 
