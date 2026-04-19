@@ -50,16 +50,21 @@ Use the returned `latitude` and `longitude` as the origin or search center for s
 
 ```bash
 node <gmaps.js> route \
-  --from-lat <lat> --from-lng <lng> \
-  --to-lat <lat>   --to-lng <lng> \
-  --mode WALK|DRIVE|TRANSIT|BICYCLE
+  --from "lat,lng" \
+  --to   "lat,lng" \
+  --mode WALK|DRIVE|TRANSIT|BICYCLE \
+  [--via "lat,lng;lat,lng;..."] \
+  [--traffic] \
+  [--optimize-waypoints]
 ```
 
+- `--via`: up to 25 intermediate waypoints, semicolon-separated
+- `--traffic`: real-time traffic-aware routing (DRIVE only)
+- `--optimize-waypoints`: reorder `--via` points for shortest total route
 - **TRANSIT may return empty results in Japan** — if result is `null` or `[]`, fall back to the **yahoo-transit** skill
 - **TRANSIT** returns an array of route options; present all options to the user
-- `--alternatives` flag forces multiple routes for non-TRANSIT modes
 
-Output (non-TRANSIT): `{ duration, distanceMeters, legs[] }`
+Output (non-TRANSIT): `{ duration, distanceMeters, legs[{ duration, distanceMeters, steps[{ duration, distanceMeters, instruction }] }] }`
 Output (TRANSIT): array of routes, each with `legs[].steps[].transitDetails`
 
 -----
@@ -68,10 +73,13 @@ Output (TRANSIT): array of routes, each with `legs[].steps[].transitDetails`
 
 ```bash
 node <gmaps.js> matrix \
-  --origins "lat1,lng1" --origins "lat2,lng2" \
-  --destinations "lat1,lng1" --destinations "lat2,lng2" \
-  --mode DRIVE|WALK
+  --origins      "lat1,lng1;lat2,lng2;..." \
+  --destinations "lat1,lng1;lat2,lng2;..." \
+  --mode DRIVE|WALK|BICYCLE|TRANSIT \
+  [--traffic]
 ```
+
+- `--traffic`: real-time traffic-aware routing (DRIVE only)
 
 Output: flat array `[{ originIndex, destinationIndex, duration, distanceMeters, condition }]`
 - Check `condition === "ROUTE_EXISTS"` before reading distance/duration
@@ -103,10 +111,10 @@ Output: `{ address, location: { lat, lng }, placeId }`
 ## 5. `search` — Places Text Search
 
 ```bash
-node <gmaps.js> search "新宿附近拉麵" [--lat <lat> --lng <lng> --radius <m>] [--min-rating 4.0] [--n 5] [--language zh-TW]
+node <gmaps.js> search "新宿附近拉麵" [--at "lat,lng" --radius <m>] [--min-rating 4.0] [--n 5] [--language zh-TW]
 ```
 
-- `--lat/--lng/--radius`: optional location bias (soft preference)
+- `--at`/`--radius`: optional location bias (soft preference)
 - `--min-rating`: minimum rating threshold (0.0–5.0, steps of 0.5)
 - `--n`: number of results (default 5)
 - `--language`: BCP-47 language code for results (default `zh-TW`; common: `ja`, `ko`, `en`)
@@ -118,7 +126,7 @@ Output: `[{ id, name, address, location, mapsUri, businessStatus, typeDisplayNam
 ## 6. `nearby` — Places Nearby Search
 
 ```bash
-node <gmaps.js> nearby --lat <lat> --lng <lng> --radius <m> --types <type1,type2,...> [--n 5] [--language zh-TW]
+node <gmaps.js> nearby --at "lat,lng" --radius <m> --types <type1,type2,...> [--n 5] [--language zh-TW]
 ```
 
 - `--radius`: hard limit in metres

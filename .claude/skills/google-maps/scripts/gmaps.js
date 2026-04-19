@@ -14,8 +14,8 @@ const BASE = 'https://routes.cyhung02.workers.dev';
 
 const PLACES_FIELDMASK       = 'places.id,places.displayName,places.formattedAddress,places.location,places.googleMapsUri,places.businessStatus,places.primaryTypeDisplayName';
 const PLACE_DETAIL_FIELDMASK = 'id,displayName,formattedAddress,location,googleMapsUri,businessStatus,primaryTypeDisplayName';
-const ROUTE_FIELDMASK        = 'routes.duration,routes.distanceMeters,routes.legs.duration,routes.legs.distanceMeters';
-const ROUTE_TRANSIT_FIELDMASK = ROUTE_FIELDMASK + ',routes.legs.steps.transitDetails,routes.legs.steps.navigationInstruction';
+const ROUTE_FIELDMASK        = 'routes.duration,routes.distanceMeters,routes.legs.duration,routes.legs.distanceMeters,routes.legs.steps.staticDuration,routes.legs.steps.distanceMeters,routes.legs.steps.navigationInstruction';
+const ROUTE_TRANSIT_FIELDMASK = ROUTE_FIELDMASK + ',routes.legs.steps.transitDetails';
 const MATRIX_FIELDMASK       = 'originIndex,destinationIndex,duration,distanceMeters,status,condition';
 
 const COOKIE_PATH = path.join(os.homedir(), '.gmaps-cookie.json');
@@ -73,6 +73,25 @@ function parseArgs(argv) {
 function die(msg) {
   process.stderr.write(msg + '\n');
   process.exit(1);
+}
+
+const ALLOWED_MODES = new Set(['WALK', 'DRIVE', 'BICYCLE', 'TRANSIT']);
+
+function checkMode(mode) {
+  if (!ALLOWED_MODES.has(mode)) die(`unsupported mode: ${mode}`);
+  return mode;
+}
+
+function parsePoint(str, flag) {
+  if (typeof str !== 'string') die(`${flag} required (format: "lat,lng")`);
+  const [lat, lng] = str.split(',').map(Number);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) die(`${flag} must be "lat,lng"`);
+  return { lat, lng };
+}
+
+function parsePoints(str, flag) {
+  if (typeof str !== 'string') die(`${flag} required (format: "lat,lng;lat,lng;...")`);
+  return str.split(';').map(s => parsePoint(s.trim(), flag));
 }
 
 // --- Output normalizers ---
@@ -206,20 +225,31 @@ const { args, positional } = parseArgs(rest);
   switch (command) {
 
     case 'route': {
-      const fromLat = args['from-lat'] ?? die('--from-lat required');
-      const fromLng = args['from-lng'] ?? die('--from-lng required');
-      const toLat   = args['to-lat']   ?? die('--to-lat required');
-      const toLng   = args['to-lng']   ?? die('--to-lng required');
-      const mode      = (args.mode ?? 'WALK').toUpperCase();
+      const from = parsePoint(args.from, '--from');
+      const to   = parsePoint(args.to,   '--to');
+      const mode = checkMode((args.mode ?? 'WALK').toUpperCase());
       const isTransit = mode === 'TRANSIT';
 
       const body = {
-        origin:      { location: { latLng: { latitude: +fromLat, longitude: +fromLng } } },
-        destination: { location: { latLng: { latitude: +toLat,   longitude: +toLng   } } },
+        origin:      { location: { latLng: { latitude: from.lat, longitude: from.lng } } },
+        destination: { location: { latLng: { latitude: to.lat,   longitude: to.lng   } } },
         travelMode: mode,
-        computeAlternativeRoutes: isTransit || !!args.alternatives,
+        computeAlternativeRoutes: isTransit,
         languageCode: 'zh-TW',
       };
+
+      if (args.via) {
+        const points = parsePoints(args.via, '--via');
+        if (points.length > 25) die('--via supports at most 25 points');
+        body.intermediates = points.map(p => ({ location: { latLng: { latitude: p.lat, longitude: p.lng } } }));
+      }
+
+      if (args['optimize-waypoints']) body.optimizeWaypointOrder = true;
+
+      if (args.traffic) {
+        if (mode !== 'DRIVE') die('--traffic requires --mode DRIVE');
+        body.routingPreference = 'TRAFFIC_AWARE_OPTIMAL';
+      }
 
       const fieldMask = isTransit ? ROUTE_TRANSIT_FIELDMASK : ROUTE_FIELDMASK;
       const raw = JSON.parse(await curlPost(`${BASE}/computeRoutes`, fieldMask, body));
@@ -230,9 +260,11 @@ const { args, positional } = parseArgs(rest);
           duration:      l.duration,
           distanceMeters: l.distanceMeters,
           steps: (l.steps ?? []).map(s => ({
-            transitDetails: s.transitDetails ?? null,
+            duration:       s.staticDuration ?? null,
+            distanceMeters: s.distanceMeters ?? null,
             instruction:    s.navigationInstruction?.instructions ?? null,
-          })).filter(s => s.transitDetails || s.instruction),
+            ...(isTransit && { transitDetails: s.transitDetails ?? null }),
+          })).filter(s => s.instruction || s.transitDetails),
         })),
       }));
 
@@ -241,14 +273,11 @@ const { args, positional } = parseArgs(rest);
     }
 
     case 'matrix': {
-      const origins      = [].concat(args.origins      ?? die('--origins required'));
-      const destinations = [].concat(args.destinations ?? die('--destinations required'));
-      const mode = (args.mode ?? 'DRIVE').toUpperCase();
+      const origins      = parsePoints(args.origins,      '--origins');
+      const destinations = parsePoints(args.destinations, '--destinations');
+      const mode = checkMode((args.mode ?? 'DRIVE').toUpperCase());
 
-      const toWaypoint = coord => {
-        const [lat, lng] = coord.split(',').map(Number);
-        return { waypoint: { location: { latLng: { latitude: lat, longitude: lng } } } };
-      };
+      const toWaypoint = p => ({ waypoint: { location: { latLng: { latitude: p.lat, longitude: p.lng } } } });
 
       const body = {
         origins:      origins.map(toWaypoint),
@@ -256,6 +285,11 @@ const { args, positional } = parseArgs(rest);
         travelMode: mode,
         languageCode: 'zh-TW',
       };
+
+      if (args.traffic) {
+        if (mode !== 'DRIVE') die('--traffic requires --mode DRIVE');
+        body.routingPreference = 'TRAFFIC_AWARE_OPTIMAL';
+      }
 
       const raw    = JSON.parse(await curlPost(`${BASE}/computeRouteMatrix`, MATRIX_FIELDMASK, body));
       const result = (Array.isArray(raw) ? raw : []).map(e => ({
@@ -307,10 +341,11 @@ const { args, positional } = parseArgs(rest);
       const n     = parseInt(args.n ?? '5', 10);
       const body  = { textQuery: query, maxResultCount: n, languageCode: args.language ?? 'zh-TW' };
       if (args['min-rating']) body.minRating = parseFloat(args['min-rating']);
-      if (args.lat && args.lng) {
+      if (args.at) {
+        const at = parsePoint(args.at, '--at');
         body.locationBias = {
           circle: {
-            center: { latitude: +args.lat, longitude: +args.lng },
+            center: { latitude: at.lat, longitude: at.lng },
             radius: +(args.radius ?? 500),
           },
         };
@@ -323,8 +358,7 @@ const { args, positional } = parseArgs(rest);
     }
 
     case 'nearby': {
-      const lat    = args.lat    ?? die('--lat required');
-      const lng    = args.lng    ?? die('--lng required');
+      const at     = parsePoint(args.at, '--at');
       const radius = args.radius ?? die('--radius required');
       const types  = (args.types ?? die('--types required')).split(',').map(t => t.trim());
       const n      = parseInt(args.n ?? '5', 10);
@@ -334,7 +368,7 @@ const { args, positional } = parseArgs(rest);
         languageCode: args.language ?? 'zh-TW',
         locationRestriction: {
           circle: {
-            center: { latitude: +lat, longitude: +lng },
+            center: { latitude: at.lat, longitude: at.lng },
             radius: +radius,
           },
         },
