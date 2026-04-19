@@ -111,7 +111,7 @@ node <gmaps.js> search "新宿附近拉麵" [--lat <lat> --lng <lng> --radius <m
 - `--n`: number of results (default 5)
 - `--language`: BCP-47 language code for results (default `zh-TW`; common: `ja`, `ko`, `en`)
 
-Output: `[{ id, name, address, location, mapsUri, businessStatus, typeDisplayName, rating, userRatingCount }]`
+Output: `[{ id, name, address, location, mapsUri, businessStatus, typeDisplayName, rating, userRatingCount, phone, website, openingStatus }]`
 
 -----
 
@@ -137,7 +137,7 @@ Output: same as `search`
 node <gmaps.js> place <place_id> [--language zh-TW]
 ```
 
-Output: `{ id, name, address, location, mapsUri, businessStatus, typeDisplayName, rating, userRatingCount }`
+Output: `{ id, name, address, location, mapsUri, businessStatus, typeDisplayName, rating, userRatingCount, phone, website, openingStatus }`
 
 `search` and `nearby` already return all the same fields — only call `place` if you already have a place_id and no other place data.
 

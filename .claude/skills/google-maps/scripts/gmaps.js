@@ -119,20 +119,28 @@ function buildPb(hexId, lat, lng) {
   return `!1m7!1s${hexId}!3m5!1m3!1d0!2d${lng}!3d${lat}!4f13.1`;
 }
 
-async function fetchSingleRating(cache, id, name, lat, lng) {
+async function fetchSinglePlaceInfo(cache, id, name, lat, lng, lang = 'zh-TW') {
   const hexId = chijToHex(id);
   const pb    = buildPb(hexId, lat, lng);
   const cookieHeader = cache.cookies.map(c => `${c.name}=${c.value}`).join('; ');
-  const url = `https://www.google.com/maps/preview/place?authuser=0&hl=en&gl=us&q=${encodeURIComponent(name)}&pb=${encodeURIComponent(pb)}`;
+  const url = `https://www.google.com/maps/preview/place?authuser=0&hl=${lang}&q=${encodeURIComponent(name)}&pb=${encodeURIComponent(pb)}`;
   const { stdout } = await execFileAsync('curl', [
     '-s', '--fail', '--compressed',
-    '-H', 'Accept-Language: en-US,en;q=0.9',
+    '-H', `Accept-Language: ${lang};q=1.0`,
     '-H', `Cookie: ${cookieHeader}`,
     url,
   ], { encoding: 'utf8', maxBuffer: 5 * 1024 * 1024 });
-  const m = stdout.match(/(?:,null){2,4},([\d.]+),(\d{2,6})[,\]]/);
-  if (!m) return { rating: null, userRatingCount: null };
-  return { rating: parseFloat(m[1]), userRatingCount: parseInt(m[2], 10) };
+  const ratingMatch  = stdout.match(/(?:,null){2,4},([\d.]+),(\d{2,6})[,\]]/);
+  const phoneMatch   = stdout.match(/call_googblue_24dp\.png","(\+[\d\s\-]+\d)"/);
+  const websiteMatch = stdout.match(/\/url\?q\\u003d(https?:\/\/[^\\]+)\\u0026/);
+  const statusMatch  = stdout.match(/schedule_googblue_24dp\.png","([^"]+)"/);
+  return {
+    rating:          ratingMatch  ? parseFloat(ratingMatch[1])       : null,
+    userRatingCount: ratingMatch  ? parseInt(ratingMatch[2], 10)     : null,
+    phone:           phoneMatch   ? phoneMatch[1]                    : null,
+    website:         websiteMatch ? websiteMatch[1]                  : null,
+    openingStatus:   statusMatch  ? statusMatch[1].replace(/\u202f/g, ' ') : null,
+  };
 }
 
 async function refreshCookies() {
@@ -151,19 +159,17 @@ async function refreshCookies() {
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
     });
     const page = await context.newPage();
-    await page.goto('https://www.google.com/maps?q=place_id:ChIJtxODuv6LGGAR7KPIhM48Zz0', { waitUntil: 'load', timeout: 30000 });
+    await page.goto('https://www.google.com', { waitUntil: 'domcontentloaded', timeout: 30000 });
     const cookies = await context.cookies(['https://www.google.com']);
-    await browser.close();
 
     const cache = { cookies, savedAt: Date.now() };
     fs.writeFileSync(COOKIE_PATH, JSON.stringify(cache));
     // Google needs a moment after cookie issuance before preview/place returns full data.
     await sleep(2000);
-    await fetchSingleRating(cache, 'ChIJtxODuv6LGGAR7KPIhM48Zz0', '', 35.680488, 139.7675915).catch(() => {});
+    await fetchSinglePlaceInfo(cache, 'ChIJtxODuv6LGGAR7KPIhM48Zz0', '', 35.680488, 139.7675915).catch(() => {});
     return cache;
-  } catch (err) {
+  } finally {
     await browser.close();
-    throw err;
   }
 }
 
@@ -177,12 +183,12 @@ async function getCookies() {
   return cookieCache;
 }
 
-async function fetchRatings(places) {
+async function fetchPlaceInfo(places, lang = 'zh-TW') {
   const cache   = await getCookies();
   const results = await Promise.all(
     places.map(p => {
       if (!p.id || !p.location) return Promise.resolve({ rating: null, userRatingCount: null });
-      return fetchSingleRating(cache, p.id, p.name, p.location.lat, p.location.lng)
+      return fetchSinglePlaceInfo(cache, p.id, p.name, p.location.lat, p.location.lng, lang)
         .catch(() => ({ rating: null, userRatingCount: null }));
     }),
   );
@@ -312,7 +318,7 @@ const { args, positional } = parseArgs(rest);
       const raw = JSON.parse(await curlPost(`${BASE}/v1/places:searchText`, PLACES_FIELDMASK, body));
       if (raw.error) die(`Places API error: ${JSON.stringify(raw.error)}`);
       const places = normalizePlaces(raw);
-      console.log(JSON.stringify(await fetchRatings(places)));
+      console.log(JSON.stringify(await fetchPlaceInfo(places, args.language ?? 'zh-TW')));
       break;
     }
 
@@ -336,7 +342,7 @@ const { args, positional } = parseArgs(rest);
       const raw = JSON.parse(await curlPost(`${BASE}/v1/places:searchNearby`, PLACES_FIELDMASK, body));
       if (raw.error) die(`Places API error: ${JSON.stringify(raw.error)}`);
       const places = normalizePlaces(raw);
-      console.log(JSON.stringify(await fetchRatings(places)));
+      console.log(JSON.stringify(await fetchPlaceInfo(places, args.language ?? 'zh-TW')));
       break;
     }
 
@@ -347,7 +353,7 @@ const { args, positional } = parseArgs(rest);
       if (raw.error) die(`Places API error: ${JSON.stringify(raw.error)}`);
       const placeData = normalizePlace(raw);
       if (placeData.id && placeData.location) {
-        const rated = await fetchRatings([placeData]);
+        const rated = await fetchPlaceInfo([placeData], lang);
         console.log(JSON.stringify(rated[0]));
       } else {
         console.log(JSON.stringify(placeData));
