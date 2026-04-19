@@ -126,8 +126,12 @@ function normalizeTransit(t) {
   const loc = p => p?.location?.latLng
     ? { lat: p.location.latLng.latitude, lng: p.location.latLng.longitude }
     : null;
+  const isBus = vehicle.type === 'BUS';
+  const lineName = isBus && line.nameShort && line.nameShort !== line.name
+    ? `${line.nameShort} ${line.name}`
+    : (line.name ?? null);
   return {
-    line:        line.name ?? null,
+    line:        lineName,
     headsign:    t.headsign ?? null,
     vehicleType: vehicle.type ?? null,
     from: { name: stops.departureStop?.name ?? null, location: loc(stops.departureStop), time: stops.departureTime ?? null },
