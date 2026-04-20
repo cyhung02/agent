@@ -21,6 +21,7 @@
 const { execFile, spawn } = require('child_process');
 const { promisify } = require('util');
 const execFileAsync = promisify(execFile);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
 const { chromium }    = require('playwright');
 const crypto = require('crypto');
 const fs   = require('fs');
@@ -75,12 +76,21 @@ const PARTNERS = [
   { key: 'Google Maps',    cidFetcher: fetchCidFromGoogleMaps },
 ];
 
+// — curl base: retry on DNS cache overflow —
+async function curlRaw(args) {
+  while (true) {
+    const { stdout } = await execFileAsync('curl', args, { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 });
+    if (stdout.includes('DNS cache overflow')) {
+      await sleep(2000);
+      continue;
+    }
+    return stdout;
+  }
+}
+
 // — API key: fetch from Agoda JS bundles —
 async function curlGetRaw(url) {
-  const { stdout } = await execFileAsync('curl', [
-    '-s', '--fail', '--compressed', '-H', `User-Agent: ${FETCH_UA}`, url,
-  ], { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 });
-  return stdout;
+  return curlRaw(['-s', '--fail', '--compressed', '-H', `User-Agent: ${FETCH_UA}`, url]);
 }
 
 async function fetchApiKey() {
@@ -92,31 +102,42 @@ async function fetchApiKey() {
   const pairs  = [...propJs.matchAll(/([0-9]+):"([a-f0-9]{4,})"/g)];
   if (!pairs.length) throw new Error('chunk map not found in property bundle');
 
-  const chunkUrls  = pairs.map(([, id, hash]) => `${CDN_BASE}${id}-${hash}.js`);
-  const configPath = path.join(os.tmpdir(), `agoda_chunks_${process.pid}_${Date.now()}.txt`);
-  fs.writeFileSync(configPath, chunkUrls.map(u => `url = "${u}"`).join('\nnext\n'));
+  const chunkUrls = pairs.map(([, id, hash]) => `${CDN_BASE}${id}-${hash}.js`);
 
-  function cleanup() { try { fs.unlinkSync(configPath); } catch {} }
-
-  return new Promise((resolve, reject) => {
-    const child = spawn('curl', [
-      '--parallel', '--parallel-max', '50', '--silent', '--compressed',
-      '-H', `User-Agent: ${FETCH_UA}`, '-K', configPath,
-    ]);
-    let tail = '', found = false;
-    child.stdout.on('data', (buf) => {
-      if (found) return;
-      tail += buf.toString('latin1');
-      const m = tail.match(KEY_RE);
-      if (m) { found = true; child.kill('SIGTERM'); resolve(m[1]); return; }
-      if (tail.length > TAIL_SIZE) tail = tail.slice(-TAIL_SIZE);
-    });
-    child.on('error', (err) => { cleanup(); reject(err); });
-    child.on('close', () => {
-      cleanup();
-      if (!found) reject(new Error('apiKey not found in any chunk'));
-    });
-  });
+  for (;;) {
+    const configPath = path.join(os.tmpdir(), `agoda_chunks_${process.pid}_${Date.now()}.txt`);
+    fs.writeFileSync(configPath, chunkUrls.map(u => `url = "${u}"`).join('\nnext\n'));
+    const cleanup = () => { try { fs.unlinkSync(configPath); } catch {} };
+    try {
+      return await new Promise((resolve, reject) => {
+        const child = spawn('curl', [
+          '--parallel', '--parallel-max', '50', '--silent', '--compressed',
+          '-H', `User-Agent: ${FETCH_UA}`, '-K', configPath,
+        ]);
+        let tail = '', found = false, dnsOverflow = false;
+        child.stdout.on('data', (buf) => {
+          if (found) return;
+          const chunk = buf.toString('latin1');
+          if (!dnsOverflow && chunk.includes('DNS cache overflow')) dnsOverflow = true;
+          tail += chunk;
+          const m = tail.match(KEY_RE);
+          if (m) { found = true; child.kill('SIGTERM'); resolve(m[1]); return; }
+          if (tail.length > TAIL_SIZE) tail = tail.slice(-TAIL_SIZE);
+        });
+        child.on('error', (err) => { cleanup(); reject(err); });
+        child.on('close', () => {
+          cleanup();
+          if (!found) reject(new Error(dnsOverflow ? 'DNS cache overflow' : 'apiKey not found in any chunk'));
+        });
+      });
+    } catch (err) {
+      if (err.message === 'DNS cache overflow') {
+        await sleep(2000);
+        continue;
+      }
+      throw err;
+    }
+  }
 }
 
 async function getApiKey() {
@@ -147,12 +168,12 @@ function hotelNameFromSlug(slug) {
 
 async function fetchCidFromGoogleMaps(hotelName, checkin, _checkout) {
   // Step 1: search Google Maps to get hex place ID
-  const { stdout: searchHtml } = await execFileAsync('curl', [
+  const searchHtml = await curlRaw([
     '-s', '--fail', '--compressed',
     '-H', `User-Agent: ${FETCH_UA}`,
     '-H', 'Accept-Language: zh-TW,zh;q=0.9,en;q=0.8',
     `https://www.google.com/search?tbm=map&hl=zh-TW&gl=tw&q=${encodeURIComponent(hotelName)}`,
-  ], { encoding: 'utf8', maxBuffer: 5 * 1024 * 1024 });
+  ]);
 
   // Skip 0x0:0x... noise entries; take first with a real (non-zero) first part
   const hexRe = /0x[0-9a-f]+:0x[0-9a-f]+/g;
@@ -181,12 +202,12 @@ async function fetchCidFromGoogleMaps(hotelName, checkin, _checkout) {
       `!2m3!1i${co.getUTCFullYear()}!2i${co.getUTCMonth() + 1}!3i${co.getUTCDate()}`,
       `!5b1!5m1!1s${encodeURIComponent(hexId)}`,
     ].join('');
-    const { stdout: placeHtml } = await execFileAsync('curl', [
+    const placeHtml = await curlRaw([
       '-s', '--fail', '--compressed',
       '-H', `User-Agent: ${FETCH_UA}`,
       '-H', 'Accept-Language: zh-TW,zh;q=0.9,en;q=0.8',
       `https://www.google.com/maps/preview/placeupdate?hl=zh-TW&gl=tw&pb=${pb}`,
-    ], { encoding: 'utf8', maxBuffer: 5 * 1024 * 1024 });
+    ]);
     const cidMatch = placeHtml.match(/site_id(?:=|%3D)(\d+)/i);
     if (!cidMatch) throw new Error(`Agoda not listed on Google Maps (offset +${offset})`);
     return parseInt(cidMatch[1], 10);
@@ -215,16 +236,16 @@ function buildHeaders(apiKey) {
 }
 
 async function curlGet(url, apiKey) {
-  const { stdout } = await execFileAsync('curl', [
+  const stdout = await curlRaw([
     '-s', '--fail', '--compressed',
     '-H', 'Referer: https://www.agoda.com/',
     ...buildHeaders(apiKey), url,
-  ], { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 });
+  ]);
   return JSON.parse(stdout);
 }
 
 async function curlPost(url, body, referer, apiKey, extraHeaders = []) {
-  const { stdout } = await execFileAsync('curl', [
+  const stdout = await curlRaw([
     '-s', '--fail', '--compressed', '-X', 'POST',
     '-H', 'Content-Type: application/json',
     '-H', `Referer: ${referer}`,
@@ -232,7 +253,7 @@ async function curlPost(url, body, referer, apiKey, extraHeaders = []) {
     ...extraHeaders,
     '--data', JSON.stringify(body),
     url,
-  ], { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 });
+  ]);
   return JSON.parse(stdout);
 }
 
