@@ -4,3 +4,4 @@ skills-lock.json
 .playwright/
 .claude/skills/**/node_modules/
 .claude/skills/**/package-lock.json
+s2.cpp/
